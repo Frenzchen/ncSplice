@@ -156,6 +156,18 @@ module Alignment
 		end
 	end
 
+	# Compares number of mismatches reported by MD:Z tag to allowed number of mismatches.
+	#
+	# mdz - String of MD:Z tag from bowtie2 alignment.
+	# mm 	- Integer of max. number of allowed mismatches.
+	#
+	# Returns boolean.
+	def mismatches?(mdz, mm)
+		mdz = mdz.split(':').last
+		counter = 0
+		%w[A T G C].each {|x| counter += mdz.count(x) if !mdz.nil?}
+		counter > mm
+	end
 end
 
 ##########################################################################################
@@ -346,8 +358,8 @@ module Analysis
 	# base_name 		- Base-name for all output file
 	#
 	# Returns fastq-file with anchor pairs.
-	def bowtie_call(bowtie_index, base_name, logfile)
-		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{base_name}_anchors.fastq | samtools view -bS - > #{base_name}.bam")
+	def bowtie_map(bowtie_index, fastq_file, output_bam, logfile)
+		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_bam}")
 		exit_code(t, stderr, 'anchor preperation', logfile)
 	end
 
@@ -470,6 +482,164 @@ module Analysis
 		File.open(output_file, 'w') do |output|
 			output_hash.each do |qname, v| 
 				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= rl
+			end
+		end
+	end
+	
+	def collaps_qnames(input_file, base_name)
+	
+		loci = {}
+		output_file = "#{base_name}_candidates.txt"
+	
+		# Read candidate loci and count reads/locus
+		File.open(input_file, 'r').readlines.each do |line|
+			line = line.strip.split("\t")
+			qname = line[0]
+			base = qname.gsub(/\/[1,2]/, '')
+			pos = line[1..3].join(':')
+			alignment_length = line[5]
+	
+			if !loci.has_key?(pos)
+				loci[pos] = {:count => 1, :qnames => [qname], :l => alignment_length}
+			else 
+				loci[pos][:qnames] << qname
+				loci[pos][:count] += 1
+			end
+		end
+
+		# Output
+		File.open(output_file, 'w') do |output|
+			loci.each do |pos, v| 
+				output.puts [pos.split(':'), v[:count], v[:l], v[:qnames].join(';')].join("\t") if v[:count] > 0
+			end
+		end
+	end
+	
+	
+	def candidates2fa(input_file, fasta, read_length, base_name)
+		exoncov = 8
+		chromosomes = {}
+		positions = []
+		output_file = "#{base_name}_faIndex.fa"
+		
+		# Input into hash sorted by chromosomes
+		File.open(input_file, 'r').readlines.each do |line|
+			line = line.strip.split("\t")[0..-2]
+			pos = line[0..2].join(':')
+			chr = line[0]
+	
+			if !chromosomes.has_key?(chr)
+				chromosomes[chr] = [line]
+		
+			# 2nd elsif to exclude reads that map on same junction but opposite ends		
+			elsif chromosomes.has_key?(chr) && !positions.include?(pos)
+				chromosomes[chr].push(line)
+				positions << pos
+			end
+		end
+
+		# Output
+		output = File.open(output_file, 'w') do |output|
+			chromosomes.each do |chr, values|
+				fasta = File.open("#{fasta}#{chr}.fa", 'r')
+				header = fasta.gets.strip
+				dna = fasta.read.gsub(/\n/, '')
+		
+				values.each do |v|
+					bp_a, bp_b = v[1..2].collect {|x| x.to_i}
+					overlap = v[-1].to_i - read_length
+					l = read_length - exoncov 
+			
+					upstream = dna[bp_a..bp_a + overlap + l - 1].upcase	
+					downstream = dna[bp_b - l - overlap + 1..bp_b - overlap].upcase
+			
+					output.puts [">#{v[0..2].join(':')}", downstream + upstream].join("\n")
+				end
+			end
+		end
+	end
+	
+	def bowtie_build(input_file, logfile)
+		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} candidates")
+	exit_code(t, stderr, 'building index', logfile)
+	end
+	
+	def remapped_reads(bam_file, base_name, rl)
+		mm = 2
+		remapped = {}
+		output_file = "#{base_name}_remappedCandidates.txt"
+		
+		# Filter remapped reads
+		bam_file.each do |line|
+			mdz = line.match(/MD:Z:[[:digit:]]+/).to_s
+			line = line.strip.split(/\s+/)
+			qname, mate = line[0].split('/')
+			chr, start, stop = line[2].split(':')
+			cigar = line[5]
+	
+			if !remapped.has_key?(qname) && !Alignment.mismatches?(mdz, mm) && cigar == "#{rl}M"
+				remapped[qname] = [chr, start, stop, mate]
+			else	
+				remapped.delete(qname)
+			end
+		end
+
+		# Output
+		File.open(output_file, 'w') do |output|
+			remapped.each {|k, v| output.puts ["#{k}/#{v[-1]}", v[0..2]].join("\t")}
+		end
+	end
+	
+	def final_candidates(before, after, output_file)
+		circles = {}
+		all_ids = {}
+
+		# Read circular candidates into hash
+		File.open(before, 'r').readlines.each do |line|
+			line = line.strip.split("\t")
+	
+			pos = line[0..2].join(':')
+			read_count = line[3].to_i
+			qname = line[-1].split(';')
+	
+			# Create qname index to make search faster
+			# Remark 2
+			qname.each do |q|
+				k1, k2 = q.split(':')[3..4]
+		
+				all_ids[k1] = {} if !all_ids.has_key?(k1)
+		
+				if !all_ids[k1].has_key?(k2)
+					all_ids[k1][k2] = [q]
+				else
+					all_ids[k1][k2] << q
+				end
+			end
+
+			circles[pos] = {:counts => read_count, :qnames => qname}
+		end
+
+		# Read remapped readpairs and compare them to initial candidates
+		File.open(after, 'r').readlines.each do |line|
+			line = line.strip.split("\t")
+	
+			qname = line[0]
+			pos = line[1..3].join(':')
+			k1, k2 = qname.split(':')[3..4]
+
+			# Add read if read is not already used (condition 2)
+			if circles.has_key?(pos) && (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname))
+				circles[pos][:counts] += 1
+				circles[pos][:qnames] << qname
+			end
+		end
+
+		# Output
+		File.open(output_file, 'w') do |output|
+			output.puts %w(chr pos_a pos_b readCounts qnames).join("\t")
+	
+			circles.each do |pos, v| 
+				output.puts [pos.split(':'), v[:counts], v[:qnames].join(';')].join("\t")
 			end
 		end
 	end

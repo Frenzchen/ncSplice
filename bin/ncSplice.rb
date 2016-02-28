@@ -82,14 +82,27 @@ logfile = File.open("logfile_#{base_name}.log", 'w')
 # Preparation of anchors
 begin
 	Analysis.prepare_anchorpairs(input_file, anchor_length, base_name)
-	Analysis.bowtie_call(bowtie_index, base_name, logfile)
+	Analysis.bowtie_map(bowtie_index, "#{base_name}_anchors.fastq", "#{base_name}.bam", logfile)
 
 	Open3.popen3("samtools view #{base_name}.bam") do |stdin, stdout, stderr, t|
 		@anchor_pairs = Analysis.process_bam(stdout, fasta, skip)
 	end
 
 	Analysis.seed_extension(@anchor_pairs, anchor_length, read_length, fasta, base_name)	
+	Analysis.collaps_qnames("#{base_name}_candidateReads.txt", base_name)
+	Analysis.candidates2fa("#{base_name}_candidates.txt", fasta, read_length, base_name)
+	Analysis.bowtie_build("#{base_name}_faIndex.fa", logfile)
 	
+	Open3.popen3("mkdir index_circles") if !Dir.exists?('index_circles')
+	Open3.popen3("mv #{base_name}_faIndex.fa index_circles/; mv *bt2 index_circles/")
+	
+	Analysis.bowtie_map("index_circles/candidates", input_file, "#{base_name}_remapping.bam", logfile)
+
+	Open3.popen3("samtools view #{base_name}_remapping.bam") do |stdin, stdout, stderr, t|
+		Analysis.remapped_reads(stdout, base_name, read_length)
+	end
+	
+	Analysis.final_candidates("#{base_name}_candidates.txt",  "#{base_name}_remappedCandidates.txt", "#{base_name}_final.txt")
 	
 rescue StandardError => err
 	logfile.puts "#{Time.new}: Error in circRNAs.rb"
