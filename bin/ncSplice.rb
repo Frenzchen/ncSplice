@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-# 24/08/2015
+# 28/02/2016
 # version: ruby 2.0.0
 # 
 # Wrapper script for circRNA detection.
@@ -89,8 +89,8 @@ begin
 	Analysis.candidates2fa("#{prefix}_candidates.txt", fasta, read_length, "#{prefix}_faIndex.fa")
 	Analysis.bowtie_build("#{prefix}_faIndex.fa", logfile)
 	
-	Open3.popen3("mkdir index_circles") if !Dir.exists?('index_circles')
-	Open3.popen3("mv #{prefix}_faIndex.fa index_circles/; mv *bt2 index_circles/")
+	Open3.popen3("mkdir {prefix}_index") if !Dir.exists?("#{prefix}_index")
+	Open3.popen3("mv #{prefix}_faIndex.fa #{prefix}_index/; mv *bt2 #{prefix}_index/")
 	
 	Analysis.bowtie_map("index_circles/candidates", input_file, "#{prefix}_remapping.bam", logfile)
 
@@ -101,7 +101,7 @@ begin
 	Analysis.final_candidates("#{prefix}_candidates.txt",  "#{prefix}_remappedCandidates.txt", "#{prefix}_final.txt")
 	
 rescue StandardError => err
-	logfile.puts "#{Time.new}: Error in circRNAs.rb"
+	logfile.puts "#{Time.new}: Error in ncSplice.rb"
 	logfile.puts err.message
 	err.backtrace.each {|line| logfile.puts line}
 	exit

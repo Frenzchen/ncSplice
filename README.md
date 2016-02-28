@@ -1,7 +1,3 @@
-# Project status
-
-- subscripts into functions, stored in lib.rb
-
 # To do
 
 - implement single-end/paired-end option

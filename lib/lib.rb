@@ -207,9 +207,9 @@ class ReadBam
 	# 5. Anchors should map a max. of 100 kb apart from each other.
 	# 6. Anchors have to be in head-to-tail configuration.
 	#
-	#	anchor   - Other half of anchor pair, given as object created by SplicedRead class.
-	# distance - Integer of the max. distance anchors should be apart form each other.
-	# exclude  - Array with chromosome names to ignore.
+	# anchor		- Other half of anchor pair, given as object created by SplicedRead class.
+	# distance	- Integer of the max. distance anchors should be apart form each other.
+	# exclude		- Array with chromosome names to ignore.
 	#
 	# Returns boolean.
 	def circular?(anchor, distance, exclude)
@@ -236,9 +236,9 @@ class ReadBam
 	# 3. Chromosome should not be on the "to exclude"-list.
 	# 4. Anchors should map a min. of 1 mb apart from each other.
 	#
-	#	anchor   - Other half of anchor pair given as object created by SplicedRead class.
-	# distance - Integer of the max. distance anchors should be apart form each other.
-	# exclude  - Array with chromosome names to ignore
+	# anchor		- Other half of anchor pair given as object created by SplicedRead class.
+	# distance	- Integer of the max. distance anchors should be apart form each other.
+	# exclude		- Array with chromosome names to ignore
 	#
 	# Returns boolean.
 	def intraChimeric?(anchor, distance, exclude)
@@ -258,8 +258,8 @@ class ReadBam
 	# 2. Anchors need to match completely.
 	# 3. Chromosome should not be on the "to exclude"-list.
 	#
-	#	anchor  - Other half of anchor pair given as object created by SplicedRead class.
-	# exclude - Array with chromosome names to ignore.
+	# anchor	- Other half of anchor pair given as object created by SplicedRead class.
+	# exclude	- Array with chromosome names to ignore.
 	#
 	# Returns boolean.
 	def interChimeric?(anchor, exclude)
@@ -496,8 +496,8 @@ module Analysis
 	# Collaps candidates reads onto common loci.
 	#
 	#
-	# input_file  - Input file.
-	#	output_file - Name of output_file.
+	# input_file	- Input file.
+	# output_file	- Name of output_file.
 	#
 	# Returns tab-delimited file with candidate loci.
 	def collaps_qnames(input_file, output_file)
@@ -534,7 +534,7 @@ module Analysis
 	# input_file  - Input file.
 	# fasta       - Path to chromsomal fasta-files.
 	# read_length - Length of sequencing read.
-	#	output_file - Name of output_file.
+	# output_file	- Name of output_file.
 	#
 	# Returns tab-delimited file with candidate loci.
 	def candidates2fa(input_file, fasta, read_length, output_file, exoncov=8)
