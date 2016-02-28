@@ -6,9 +6,9 @@ module Alignment
 	
 	# Trims end of alignment if mismatch is in the last 2 bp, likely to be a mapping error.
 	#
-	# array - array of Integers from mapping with breakpoint_downstream or
+	# array	- array of Integers from mapping with breakpoint_downstream or
 	#					breakpoint_upstream methods.
-	# mm 		- Number of allowed mismatches.
+	# mm		- Number of allowed mismatches.
 	#
 	# Returns integer of trimmed alignment array.
 	def trim(array, mm)
@@ -20,8 +20,8 @@ module Alignment
 	# Extends 3' anchor to upstream genomic region.
 	# Methods uses the trim-method to remove mismatches from the alignment end.
 	#
-	# ref	- Reference sequence to which DNA sequence will be compared.
-	# mm	- Number of allowed mismatches.
+	# ref - Reference sequence to which DNA sequence will be compared.
+	# mm  - Number of allowed mismatches.
 	#
 	# Returns integer of alignment length.
 	def upstream(seq, reference, mm)
@@ -42,8 +42,8 @@ module Alignment
 	# Extends 5' anchor to downstream genomic region.
 	# Methods uses the trim-method to remove mismatches from the alignment end.
 	#
-	# ref	- Reference sequence to which DNA sequence will be compared.
-	# mm	- Number of allowed mismatches.
+	# ref - Reference sequence to which DNA sequence will be compared.
+	# mm  - Number of allowed mismatches.
 	#
 	# Returns integer of alignment length.
 	def downstream(seq, reference, mm)
@@ -64,7 +64,7 @@ module Alignment
 	# Create reverse complement of DNA.
 	# 
 	#
-	# dna	- DNA sequence
+	# dna - DNA sequence
 	#
 	# Returns reverse complement.
 	def reverse_complement(dna)
@@ -159,7 +159,7 @@ module Alignment
 	# Compares number of mismatches reported by MD:Z tag to allowed number of mismatches.
 	#
 	# mdz - String of MD:Z tag from bowtie2 alignment.
-	# mm 	- Integer of max. number of allowed mismatches.
+	# mm  - Integer of max. number of allowed mismatches.
 	#
 	# Returns boolean.
 	def mismatches?(mdz, mm)
@@ -181,11 +181,11 @@ class ReadBam
 	#
 	# Create new SplicedRead object:
 	#
-	# id 			- Read id of the read anchor.
-	# strand 	- Strand on which the anchor maps. 
-	# chr 		- Chromosome on which the anchor maps.
-	# start 	- Start position of anchor mapping.
-	# cigar 	- Cigar string of anchor mapping.
+	# id      - Read id of the read anchor.
+	# strand  - Strand on which the anchor maps. 
+	# chr     - Chromosome on which the anchor maps.
+	# start   - Start position of anchor mapping.
+	# cigar   - Cigar string of anchor mapping.
 	attr_accessor :id, :strand, :chr, :start, :cigar
 	
 	def initialize(line)
@@ -207,9 +207,9 @@ class ReadBam
 	# 5. Anchors should map a max. of 100 kb apart from each other.
 	# 6. Anchors have to be in head-to-tail configuration.
 	#
-	#	anchor		- Other half of anchor pair, given as object created by SplicedRead class.
-	# distance 	- Integer of the max. distance anchors should be apart form each other.
-	# exclude 	- Array with chromosome names to ignore.
+	#	anchor   - Other half of anchor pair, given as object created by SplicedRead class.
+	# distance - Integer of the max. distance anchors should be apart form each other.
+	# exclude  - Array with chromosome names to ignore.
 	#
 	# Returns boolean.
 	def circular?(anchor, distance, exclude)
@@ -236,9 +236,9 @@ class ReadBam
 	# 3. Chromosome should not be on the "to exclude"-list.
 	# 4. Anchors should map a min. of 1 mb apart from each other.
 	#
-	#	anchor		- Other half of anchor pair given as object created by SplicedRead class.
-	# distance 	- Integer of the max. distance anchors should be apart form each other.
-	# exclude 	- Array with chromosome names to ignore
+	#	anchor   - Other half of anchor pair given as object created by SplicedRead class.
+	# distance - Integer of the max. distance anchors should be apart form each other.
+	# exclude  - Array with chromosome names to ignore
 	#
 	# Returns boolean.
 	def intraChimeric?(anchor, distance, exclude)
@@ -258,8 +258,8 @@ class ReadBam
 	# 2. Anchors need to match completely.
 	# 3. Chromosome should not be on the "to exclude"-list.
 	#
-	#	anchor		- Other half of anchor pair given as object created by SplicedRead class.
-	# exclude 	- Array with chromosome names to ignore.
+	#	anchor  - Other half of anchor pair given as object created by SplicedRead class.
+	# exclude - Array with chromosome names to ignore.
 	#
 	# Returns boolean.
 	def interChimeric?(anchor, exclude)
@@ -284,9 +284,9 @@ module Analysis
 	# Exits program if subprocess was not finished successfully.
 	#
 	#
-	# t 			- Open3 object for thread.
-	# stderr	- Open3 object for STDERR.
-	# name 		- Name for logfile.
+	# t       - Open3 object for thread.
+	# stderr  - Open3 object for STDERR.
+	# name    - Name for logfile.
 	# logfile - Name of logfile to write to.
 	#
 	# Returns string that is written to logfile. 
@@ -307,14 +307,13 @@ module Analysis
 	# Prepare fastq-file with anchors from unmapped.fastq.
 	#
 	#
-	# input_file 		- unmapped.fastq.
-	# anchor_length	- Length of anchor, default is 20 bp.
-	# base_name 		- Base-name for all output file
+	# input_file    - unmapped.fastq.
+	# anchor_length - Length of anchor, default is 20 bp.
+	# output_file   - Name of output file.
 	#
 	# Returns fastq-file with anchor pairs.
-	def prepare_anchorpairs(input_file, anchor_length, base_name)
-
-		output_file = "#{base_name}_anchors.fastq"
+	def prepare_anchorpairs(input_file, anchor_length, output_file)
+		
 		name, mate, seq, quality = nil
 		counter = -1
 
@@ -350,33 +349,33 @@ module Analysis
 		end
 	end
 
-	# Performs anchor mapping with bowtie2 call.
-	# Success is ....
+	# Mapping of anchors via bowtie2 system call.
 	#
 	#
-	# bowtie_index 	- Index file, .... .
-	# base_name 		- Base-name for all output file
+	# bowtie_index  - Path to bowtie index and index base name
+	# fastq_file    - Fastq-file with anchors
+	# output_file   - Name of output file
+	# logfile       - Name of logfile to write to.
 	#
-	# Returns fastq-file with anchor pairs.
-	def bowtie_map(bowtie_index, fastq_file, output_bam, logfile)
-		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_bam}")
+	# Returns mapped anchors in bam-format.
+	def bowtie_map(bowtie_index, fastq_file, output_file, logfile)
+		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_file}")
 		exit_code(t, stderr, 'anchor preperation', logfile)
 	end
 
-	# Performs anchor mapping with bowtie2 call.
-	# Success is ....
+	# Read bam-file from IO and process lines pair-wise to filter circRNA candidates.
 	#
 	#
-	# bowtie_index 	- Index file, .... .
-	# base_name 		- Base-name for all output file
+	# input_file - Input file from IO
+	# fasta      - Path to chromsomal fasta-files.
+	# skip       - Text-file with chromsomes to skip, one/line.
 	#
-	# Returns fastq-file with anchor pairs.
-	def process_bam(bam_file, fasta, skip)
+	# Returns hash with valid anchor pairs.
+	def process_bam(input_file, fasta, skip, distance=100000)
 
 		# general settings
 		exclude = []
 		File.open(skip, 'r').readlines.each {|line| exclude << line.strip}
-		distance = 100000
 		firstline = TRUE 
 		anchor_left = nil
 		anchor_right = nil
@@ -392,7 +391,7 @@ module Analysis
 		end
 
 		# read bam file
-		bam_file.each do |line|
+		input_file.each do |line|
 			line = line.strip.split(/\s+/)
 		
 			if firstline 
@@ -419,10 +418,18 @@ module Analysis
 		input_hash
 	end
 
-	def seed_extension(input_hash, anchor, rl, fasta, base_name)
-		output_file = "#{base_name}_candidateReads.txt"
-		mm = 1
-		max_overhang = 108
+	# Seed extension. Anchor pairs are extended and if succesful, kept as candidates
+	#
+	#
+	# input_hash    - Input hash with anchor pairs.
+	# anchor_length - Length of anchors
+	# read_length   - Length of sequencing read.
+	# fasta         - Path to chromsomal fasta-files.
+	#	output_file   - Name of output_file.
+	#
+	# Returns tab-delimited file with initial candidates.
+	def seed_extension(input_hash, anchor_length, read_length, fasta, output_file, mm=1, max_overhang=read_length+8)
+
 		output_hash = {}
 	
 		input_hash.each do |chr, anchorpairs|
@@ -441,16 +448,16 @@ module Analysis
 				strand, chr, upstream_start, downstream_start = upstream.strand, upstream.chr, upstream.start - 1, downstream.start - 1
 
 				read = Alignment.reverse_complement(read) if strand != '0'
-				upstream_dna = dna[upstream_start - rl + anchor..upstream_start + anchor - 1].upcase
-				downstream_dna = dna[downstream_start..downstream_start + rl - 1].upcase
+				upstream_dna = dna[upstream_start - read_length + anchor_length..upstream_start + anchor_length - 1].upcase
+				downstream_dna = dna[downstream_start..downstream_start + read_length - 1].upcase
 				upstream_alignmentlength = Alignment.upstream(read, upstream_dna, mm)
 				downstream_alignmentlength = Alignment.downstream(read, downstream_dna, mm)
 				total_alignmentlength = upstream_alignmentlength + downstream_alignmentlength
 
-				if total_alignmentlength >= rl && total_alignmentlength <= max_overhang
-					upstream_breakpoint = upstream_start - upstream_alignmentlength + anchor	
+				if total_alignmentlength >= read_length && total_alignmentlength <= max_overhang
+					upstream_breakpoint = upstream_start - upstream_alignmentlength + anchor_length	
 					downstream_breakpoint = downstream_start + downstream_alignmentlength - 1
-					overhang = total_alignmentlength - rl
+					overhang = total_alignmentlength - read_length
 
 					# splice site analysis
 					up = upstream_dna[-upstream_alignmentlength..-1]
@@ -466,7 +473,7 @@ module Analysis
 					# Conversion needed to make downstream analysis easier
 					strand == '0' ? strand = 1 : strand = -1
 					qname = qname.to_sym
-					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], rl + motif_summary[:o], mate] 
+					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], read_length + motif_summary[:o], mate] 
 
 					# Candidates for which both, R1 and R2, are present are deleted
 					# One read can neither fall on two different non-canonical nor the same junction
@@ -481,15 +488,21 @@ module Analysis
 	
 		File.open(output_file, 'w') do |output|
 			output_hash.each do |qname, v| 
-				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= rl
+				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= read_length
 			end
 		end
 	end
 	
-	def collaps_qnames(input_file, base_name)
+	# Collaps candidates reads onto common loci.
+	#
+	#
+	# input_file  - Input file.
+	#	output_file - Name of output_file.
+	#
+	# Returns tab-delimited file with candidate loci.
+	def collaps_qnames(input_file, output_file)
 	
 		loci = {}
-		output_file = "#{base_name}_candidates.txt"
 	
 		# Read candidate loci and count reads/locus
 		File.open(input_file, 'r').readlines.each do |line|
@@ -515,12 +528,18 @@ module Analysis
 		end
 	end
 	
-	
-	def candidates2fa(input_file, fasta, read_length, base_name)
-		exoncov = 8
+	# Transform candidate loci into fasta-format.
+	#
+	#
+	# input_file  - Input file.
+	# fasta       - Path to chromsomal fasta-files.
+	# read_length - Length of sequencing read.
+	#	output_file - Name of output_file.
+	#
+	# Returns tab-delimited file with candidate loci.
+	def candidates2fa(input_file, fasta, read_length, output_file, exoncov=8)
 		chromosomes = {}
 		positions = []
-		output_file = "#{base_name}_faIndex.fa"
 		
 		# Input into hash sorted by chromosomes
 		File.open(input_file, 'r').readlines.each do |line|
@@ -559,25 +578,39 @@ module Analysis
 		end
 	end
 	
+	# Built bowtie-index from candidate loci.
+	#
+	#
+	# input_file - Input file.
+	# logfile    - Name of logfile to write to.
+	#
+	# Returns tab-delimited file with candidate loci.
 	def bowtie_build(input_file, logfile)
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} candidates")
 	exit_code(t, stderr, 'building index', logfile)
 	end
 	
-	def remapped_reads(bam_file, base_name, rl)
-		mm = 2
+	# Filter remapped reads, keep those that haven't been used yet and fullfill criteria
+	#
+	#
+	# input_file  - Input file.
+	# output_file - Name of output_file.
+	# read_length - Length of sequencing read.
+	# mm          - Number of mismatchs, default 2.	
+	#
+	# Returns tab-delimited file with candidate loci.
+	def remapped_reads(input_file, output_file, read_length, mm=2)
 		remapped = {}
-		output_file = "#{base_name}_remappedCandidates.txt"
 		
 		# Filter remapped reads
-		bam_file.each do |line|
+		input_file.each do |line|
 			mdz = line.match(/MD:Z:[[:digit:]]+/).to_s
 			line = line.strip.split(/\s+/)
 			qname, mate = line[0].split('/')
 			chr, start, stop = line[2].split(':')
 			cigar = line[5]
 	
-			if !remapped.has_key?(qname) && !Alignment.mismatches?(mdz, mm) && cigar == "#{rl}M"
+			if !remapped.has_key?(qname) && !Alignment.mismatches?(mdz, mm) && cigar == "#{read_length}M"
 				remapped[qname] = [chr, start, stop, mate]
 			else	
 				remapped.delete(qname)
@@ -590,6 +623,14 @@ module Analysis
 		end
 	end
 	
+	# Compare first mapping and remapping to get final candidates.
+	#
+	#
+	# before      - Input file.
+	# after       - Name of logfile to write to.
+	# output_file - Name of output_file.
+	#
+	# Returns tab-delimited file with candidate loci.
 	def final_candidates(before, after, output_file)
 		circles = {}
 		all_ids = {}
