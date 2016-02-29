@@ -17,6 +17,7 @@ module Alignment
 		array.length
 	end
 
+
 	# Extends 3' anchor to upstream genomic region.
 	# Methods uses the trim-method to remove mismatches from the alignment end.
 	#
@@ -39,6 +40,7 @@ module Alignment
 		end
 	end
 
+
 	# Extends 5' anchor to downstream genomic region.
 	# Methods uses the trim-method to remove mismatches from the alignment end.
 	#
@@ -60,6 +62,7 @@ module Alignment
 			end
 		end
 	end
+
 
 	# Create reverse complement of DNA.
 	# 
@@ -84,6 +87,7 @@ module Alignment
 		end
 		complement.join('').reverse
 	end
+	
 	
 	# Compare motif via 2bp sliding window to know U2 and U12 splice sites.
 	# Each motif pair (upstream + downstream) is scored.
@@ -156,6 +160,7 @@ module Alignment
 		end
 	end
 
+
 	# Compares number of mismatches reported by MD:Z tag to allowed number of mismatches.
 	#
 	# mdz - String of MD:Z tag from bowtie2 alignment.
@@ -168,6 +173,31 @@ module Alignment
 		%w[A T G C].each {|x| counter += mdz.count(x) if !mdz.nil?}
 		counter > mm
 	end
+	
+	
+	#needs documentation
+	def genomic_mappinglength(cigar)
+		if cigar == '50M'
+			50
+		elsif cigar.include?('N') && %w(I D S H P).all? {|x| !cigar.include?(x)}
+			cigar = cigar.split(/N|M/).collect {|x| x.to_i}
+			cigar.inject {|sum, x| sum + x}
+		else
+			false
+		end
+	end
+
+	def paired?(mate1, mate2)
+		mate1_chr, mate1_start, mate1_stop, mate1_strand = mate1
+		mate2_chr, mate2_start, mate2_stop, mate2_strand = mate2
+		conditions = []
+		
+		conditions.push(mate1_chr == mate2_chr)
+		conditions.push(mate1_start <= mate2_start && mate1_stop >= mate2_stop)
+		conditions.push(mate1_strand != mate2_strand)
+		conditions.all? { |con| con == true }
+	end
+
 end
 
 ##########################################################################################
@@ -194,9 +224,16 @@ class ReadBam
 		@cigar = line.find {|l| l.match(/MD:Z:[[:digit:]]+/) }
 	end
 	
+	
 	def start
 		@start.to_i
 	end
+	
+	
+	def strand
+		@strand.to_i & 0x10 > 0 ? @strand = -1 : @strand = 1
+	end
+	
 	
 	# Examines whether read pairs fulfills circular RNA conditions.
 	# Those are:
@@ -220,14 +257,15 @@ class ReadBam
 		conditions << [cigar, anchor.cigar].all? {|c| c == 'MD:Z:20'} # 3.
 		conditions << exclude.all? {|c| ![chr, anchor.chr].include?(c)}	# 4.
 		conditions << ((start - anchor.start).abs <= distance) # 5.
-		if strand == '0' && anchor.strand == '0' # 6.
+		if strand == 1 && anchor.strand == 1 # 6.
 			conditions << (start > anchor.start)
-		elsif strand == '16' && anchor.strand == '16'
+		elsif strand == -1 && anchor.strand == -1
 			conditions << (start < anchor.start)
 		end
 	
 		conditions.all? {|a| a == true}
 	end
+	
 	
 	# Examines whether read pairs fulfills intra-chromosomal transcript conditions.
 	# Those are:
@@ -251,6 +289,7 @@ class ReadBam
 	
 		conditions.all? {|a| a == true }
 	end
+
 
 	# Examines whether read pairs fulfills intra-chromosomal transcript conditions.
 	# Those are:
@@ -304,6 +343,26 @@ module Analysis
 		end
 	end
  
+	def read_singletons(singletons)
+		single_reads = {}
+		
+		File.open(singletons, 'r').readlines.each do |line|
+  
+  		line = line.strip.split(/\s+/)
+  		qname, flag, chr, start = line[0..3]  	
+  		flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
+  		cigar = line[5]
+			distance = mapping_span(cigar)
+			
+			if distance != false
+				strand == 1 ? stop = start + distance : stop = start - distance
+				single_reads[qname] = [chr, start, stop, strand]
+			end
+		end
+		single_reads
+	end
+	
+	
 	# Prepare fastq-file with anchors from unmapped.fastq.
 	#
 	#
@@ -349,6 +408,7 @@ module Analysis
 		$logfile.puts "#{Time.new.strftime("%c")}: Anchor preparation succeded."	
 	end
 
+
 	# Mapping of anchors via bowtie2 system call.
 	#
 	#
@@ -362,6 +422,7 @@ module Analysis
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_file}")
 		system_exitcode(t, stderr, 'Bowtie2')
 	end
+
 
 	# Read bam-file from IO and process lines pair-wise to filter circRNA candidates.
 	#
@@ -384,8 +445,6 @@ module Analysis
 		# Initiate chromosome hash
 		Dir.foreach(fasta) do |item|
 			chr = item.sub('.fa', '')
-	
-			# Remark 2 and 3
 			next if item == '.' || item == '..' || exclude.include?(chr)  
 			input_hash[chr] = []
 		end
@@ -404,7 +463,7 @@ module Analysis
 				if anchor_left.circular?(anchor_right, distance, exclude)
 		
 					# store coordinate sorted
-					if anchor_left.strand == '0' 
+					if anchor_left.strand == 1
 						input_hash[chr] << [anchor_right, anchor_left] 
 					else
 						input_hash[chr] << [anchor_left, anchor_right]
@@ -419,6 +478,7 @@ module Analysis
 		input_hash
 	end
 
+
 	# Seed extension. Anchor pairs are extended and if succesful, kept as candidates
 	#
 	#
@@ -429,7 +489,7 @@ module Analysis
 	#	output_file   - Name of output_file.
 	#
 	# Returns tab-delimited file with initial candidates.
-	def seed_extension(input_hash, anchor_length, read_length, fasta, output_file, mm=1, max_overhang=read_length+8)
+	def seed_extension(input_hash, anchor_length, read_length, fasta, output_file, mm = 1, max_overhang = read_length + 8)
 
 		output_hash = {}
 	
@@ -448,9 +508,9 @@ module Analysis
 
 				strand, chr, upstream_start, downstream_start = upstream.strand, upstream.chr, upstream.start - 1, downstream.start - 1
 
-				read = Alignment.reverse_complement(read) if strand != '0'
+				read = Alignment.reverse_complement(read) if strand == -1
 				upstream_dna = dna[upstream_start - read_length + anchor_length..upstream_start + anchor_length - 1].upcase
-				downstream_dna = dna[downstream_start..downstream_start + read_length - 1].upcase
+				downstream_dna = dna[downstream_start..downstream_start + read_length - 1].upcase				
 				upstream_alignmentlength = Alignment.upstream(read, upstream_dna, mm)
 				downstream_alignmentlength = Alignment.downstream(read, downstream_dna, mm)
 				total_alignmentlength = upstream_alignmentlength + downstream_alignmentlength
@@ -471,8 +531,6 @@ module Analysis
 						downstream_breakpoint = downstream_breakpoint - overhang + i + 2
 					end
 	
-					# Conversion needed to make downstream analysis easier
-					strand == '0' ? strand = 1 : strand = -1
 					qname = qname.to_sym
 					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], read_length + motif_summary[:o], mate] 
 
@@ -486,7 +544,12 @@ module Analysis
 				end
 			end
 		end
-	
+		
+		# remove unpaired reads if paire-end option given
+		if $sequencing_type == 'pe'
+			output_hash[qname].select {|qname, values| $singletons.has_key?(qname) && paired?(summary, $singletons[qname])}
+		end
+
 		File.open(output_file, 'w') do |output|
 			output_hash.each do |qname, v| 
 				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= read_length
@@ -494,6 +557,7 @@ module Analysis
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Seed extension succeded."
 	end
+	
 	
 	# Collaps candidates reads onto common loci.
 	#
@@ -530,6 +594,7 @@ module Analysis
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Collapsed anchor pairs to single loci."
 	end
+	
 	
 	# Transform candidate loci into fasta-format.
 	#
@@ -582,6 +647,7 @@ module Analysis
 		$logfile.puts "#{Time.new.strftime("%c")}: Wrote loci to fasta-file."
 	end
 	
+	
 	# Built bowtie-index from candidate loci.
 	#
 	#
@@ -593,6 +659,7 @@ module Analysis
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} candidates")
 	system_exitcode(t, stderr, 'Building bowtie2 index')
 	end
+	
 	
 	# Filter remapped reads, keep those that haven't been used yet and fullfill criteria
 	#
@@ -627,6 +694,29 @@ module Analysis
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Found remapped reads."
 	end
+	
+# 	def read_singletons(singletons)
+# 		single_reads = {}
+# 	
+# 		File.open(singletons, 'r').readlines.each do |line|
+# 	
+# 			# initialize variables
+# 			line = line.strip.split(/\s+/)
+# 			qname, flag, chr = line[0..2]
+# 			flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
+# 			flag.to_i & 0x40 > 0 ? mate = '1' : mate = '2'
+# 			start, cigar = line[3].to_i, line[5]
+# 			distance = mapping_span(cigar)
+# 
+# 			if distance != false
+# 				# determine stop sequence
+# 				strand == '1' ? stop = start + distance : stop = start - distance
+# 				single_reads[qname] =  [chr, start, stop, strand]
+# 			end
+# 		end
+# 		single_reads
+# 	end
+	
 	
 	# Compare first mapping and remapping to get final candidates.
 	#
@@ -673,8 +763,15 @@ module Analysis
 			pos = line[1..3].join(':')
 			k1, k2 = qname.split(':')[3..4]
 
+			read_unused = (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname)) 
+			
+			if $sequencing_type == 'pe'
+				qname = qname.split('/').first
+				next if !$singletons.has_key?(qname) || !paired?(summary, $singletons[qname])
+			end
+			
 			# Add read if read is not already used (condition 2)
-			if circles.has_key?(pos) && (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname))
+			if circles.has_key?(pos) && read_unused 
 				circles[pos][:counts] += 1
 				circles[pos][:qnames] << qname
 			end
