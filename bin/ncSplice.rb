@@ -40,7 +40,7 @@ optparse = OptionParser.new do |opts|
 	
 	opts.on('-v', '--version', 'Print dependencies') do
 		puts "# Dependencies"
-    puts ["ruby >= 2.0.0", "samtools >= 1.0.0", "bowtie2 version >= 2.1.0"].join("\n")
+    puts ["ruby >= 2.0.0", "samtools >= 1.0.0", "bowtie2 >= 2.1.0"].join("\n")
     puts "\n# ncSplice"
     puts "ncSplice v1.0.0"
     exit
@@ -57,11 +57,8 @@ optparse = OptionParser.new do |opts|
   opts.on('-s', '--skip-chr <filename>', String, 'Text file with chromosomes to exclude, such as the mitochondrial chromsome MT (recommanded), chromsomes need to be listed in separate text-file with one chromosome per line.') {|s| options[:skip] = s}
 end
 
-begin
-  optparse.parse!(ARGV)
-rescue OptionParser::ParseError => err
-  $stderr.print "Error in calling scripts: #{err}"
-end
+optparse.parse!(ARGV)
+optparse.parse!(ARGV << '-h') if options.length <= 6
 
 input_file = options[:input]
 prefix = options[:prefix]
@@ -70,7 +67,7 @@ anchor_length = options[:anchor]
 read_length = options[:readlength]
 options[:fasta][-1] == '/' ? fasta = options[:fasta] : fasta = "#{options[:fasta]}/"
 skip = options[:skip]
-logfile = File.open("#{prefix}_logfile.log", 'w')
+$logfile = File.open("#{prefix}_logfile.log", 'w')
 
 
 # run
@@ -78,7 +75,7 @@ logfile = File.open("#{prefix}_logfile.log", 'w')
 
 begin
 	Analysis.prepare_anchorpairs(input_file, anchor_length, "#{prefix}_anchors.fastq")
-	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam", logfile)
+	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam")
 
 	Open3.popen3("samtools view #{prefix}.bam") do |stdin, stdout, stderr, t|
 		@anchor_pairs = Analysis.process_bam(stdout, fasta, skip)
@@ -87,12 +84,12 @@ begin
 	Analysis.seed_extension(@anchor_pairs, anchor_length, read_length, fasta, "#{prefix}_candidateReads.txt")	
 	Analysis.collaps_qnames("#{prefix}_candidateReads.txt", "#{prefix}_candidates.txt")
 	Analysis.candidates2fa("#{prefix}_candidates.txt", fasta, read_length, "#{prefix}_faIndex.fa")
-	Analysis.bowtie_build("#{prefix}_faIndex.fa", logfile)
+	Analysis.bowtie_build("#{prefix}_faIndex.fa")
 	
 	Open3.popen3("mkdir {prefix}_index") if !Dir.exists?("#{prefix}_index")
 	Open3.popen3("mv #{prefix}_faIndex.fa #{prefix}_index/; mv *bt2 #{prefix}_index/")
 	
-	Analysis.bowtie_map("index_circles/candidates", input_file, "#{prefix}_remapping.bam", logfile)
+	Analysis.bowtie_map("index_circles/candidates", input_file, "#{prefix}_remapping.bam")
 
 	Open3.popen3("samtools view #{prefix}_remapping.bam") do |stdin, stdout, stderr, t|
 		Analysis.remapped_reads(stdout, "#{prefix}_remappedCandidates.txt", read_length)
@@ -101,8 +98,8 @@ begin
 	Analysis.final_candidates("#{prefix}_candidates.txt",  "#{prefix}_remappedCandidates.txt", "#{prefix}_final.txt")
 	
 rescue StandardError => err
-	logfile.puts "#{Time.new}: Error in ncSplice.rb"
-	logfile.puts err.message
-	err.backtrace.each {|line| logfile.puts line}
+	$logfile.puts "#{Time.new}: Error in ncSplice.rb"
+	$logfile.puts err.message
+	err.backtrace.each {|line| $logfile.puts line}
 	exit
 end

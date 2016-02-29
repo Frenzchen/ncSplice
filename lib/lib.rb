@@ -6,7 +6,7 @@ module Alignment
 	
 	# Trims end of alignment if mismatch is in the last 2 bp, likely to be a mapping error.
 	#
-	# array	- array of Integers from mapping with breakpoint_downstream or
+	# array	- Array of Integers from mapping with breakpoint_downstream or
 	#					breakpoint_upstream methods.
 	# mm		- Number of allowed mismatches.
 	#
@@ -258,7 +258,7 @@ class ReadBam
 	# 2. Anchors need to match completely.
 	# 3. Chromosome should not be on the "to exclude"-list.
 	#
-	# anchor	- Other half of anchor pair given as object created by SplicedRead class.
+	#	anchor	- Other half of anchor pair given as object created by SplicedRead class.
 	# exclude	- Array with chromosome names to ignore.
 	#
 	# Returns boolean.
@@ -290,20 +290,20 @@ module Analysis
 	# logfile - Name of logfile to write to.
 	#
 	# Returns string that is written to logfile. 
-	def exit_code(t, stderr, name, logfile)	
+	def system_exitcode(t, stderr, name)	
 		if t.value.success?
-			logfile.puts "#{Time.new}: #{name} finished"
+			$logfile.puts "#{Time.new.strftime("%c")}: #{name} succeded."
 			if stderr.any?
-				logfile.puts "Output of #{name}:"
-				stderr.readlines.each {|line| logfile.puts line}
+				$logfile.puts "#{name} output:"
+				stderr.readlines.each {|line| $logfile.puts line}
 			end
 		else
-			logfile.puts "#{Time.new}: Error in #{name}:"
-			stderr.readlines.each {|line| logfile.puts line}
+			$logfile.puts "#{Time.new.strftime("%c")}: Error in #{name}:"
+			stderr.readlines.each {|line| $logfile.puts line}
 			exit
 		end
 	end
-
+ 
 	# Prepare fastq-file with anchors from unmapped.fastq.
 	#
 	#
@@ -312,8 +312,7 @@ module Analysis
 	# output_file   - Name of output file.
 	#
 	# Returns fastq-file with anchor pairs.
-	def prepare_anchorpairs(input_file, anchor_length, output_file)
-		
+	def prepare_anchorpairs(input_file, anchor_length, output_file)	
 		name, mate, seq, quality = nil
 		counter = -1
 
@@ -347,6 +346,7 @@ module Analysis
 				end 
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Anchor preparation succeded."	
 	end
 
 	# Mapping of anchors via bowtie2 system call.
@@ -358,9 +358,9 @@ module Analysis
 	# logfile       - Name of logfile to write to.
 	#
 	# Returns mapped anchors in bam-format.
-	def bowtie_map(bowtie_index, fastq_file, output_file, logfile)
+	def bowtie_map(bowtie_index, fastq_file, output_file)
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_file}")
-		exit_code(t, stderr, 'anchor preperation', logfile)
+		system_exitcode(t, stderr, 'Bowtie2')
 	end
 
 	# Read bam-file from IO and process lines pair-wise to filter circRNA candidates.
@@ -415,6 +415,7 @@ module Analysis
 				firstline = TRUE
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Found anchor pairs."		
 		input_hash
 	end
 
@@ -491,6 +492,7 @@ module Analysis
 				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= read_length
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Seed extension succeded."
 	end
 	
 	# Collaps candidates reads onto common loci.
@@ -526,6 +528,7 @@ module Analysis
 				output.puts [pos.split(':'), v[:count], v[:l], v[:qnames].join(';')].join("\t") if v[:count] > 0
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Collapsed anchor pairs to single loci."
 	end
 	
 	# Transform candidate loci into fasta-format.
@@ -576,6 +579,7 @@ module Analysis
 				end
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Wrote loci to fasta-file."
 	end
 	
 	# Built bowtie-index from candidate loci.
@@ -585,9 +589,9 @@ module Analysis
 	# logfile    - Name of logfile to write to.
 	#
 	# Returns tab-delimited file with candidate loci.
-	def bowtie_build(input_file, logfile)
+	def bowtie_build(input_file)
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} candidates")
-	exit_code(t, stderr, 'building index', logfile)
+	system_exitcode(t, stderr, 'Building bowtie2 index')
 	end
 	
 	# Filter remapped reads, keep those that haven't been used yet and fullfill criteria
@@ -621,6 +625,7 @@ module Analysis
 		File.open(output_file, 'w') do |output|
 			remapped.each {|k, v| output.puts ["#{k}/#{v[-1]}", v[0..2]].join("\t")}
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Found remapped reads."
 	end
 	
 	# Compare first mapping and remapping to get final candidates.
@@ -683,5 +688,6 @@ module Analysis
 				output.puts [pos.split(':'), v[:counts], v[:qnames].join(';')].join("\t")
 			end
 		end
+		$logfile.puts "#{Time.new.strftime("%c")}: Final candidate list finished."
 	end
 end
