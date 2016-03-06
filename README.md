@@ -41,7 +41,7 @@ The detection of circRNAs, intra- and inter-chromosomal fusion follows similar s
 
    Take a fastq-file, which contains the unmapped reads and prepare an output fastq-file with corresponding anchors. A new qname is created, which is based on the original qname, the mate information, the read itself and the terminus A or B showing which side of the read was taken (A = left, B = right): 
 
-    > @HWI-D00108:213:C3U67ACXX:1:1106:5218:96673_1_TTTCTGTGAGCTTATGAGGCCATTCTGCACATTATCAAAATGAAATCATTATGCAGTAACCTTATACAAATCTCATAATAAAATAACCATGTATACCACT_A
+    > @HWI-D00108:213:C3U67ACXX:1:1106:5218:96673\_1\_...TTTCTGTGAG...\_A
 
 2. 1st mapping round
 
@@ -87,7 +87,7 @@ ncSplice will for sure not work on versions < 1.9.2. These versions do not conta
 
 ncSplice was developed based on the tophat output, which will by default created two bam files: accepted_hits.bam and unmapped.bam. For the further analysis, unmapped reads have to be converted into fast-format. This can be done via the helper script `unmapped2fq.rb`. If analysis should be run in paired-end format an additional file of singletons needs to be provided. This file can be obtained by using SAMtools:
 
-```samtools view -f 0x08 unmmaped.bam > singletons.txt```
+```samtools view -f 0x08 accepted_hits.bam > singletons.txt```
 
 The `0x08` flag will filter for reads for which the partner could not be mapped, and thus is found in the unmapped fraction.
 
