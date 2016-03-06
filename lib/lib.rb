@@ -4,13 +4,14 @@ module Alignment
 
 	extend self
 	
-	# Trims end of alignment if mismatch is in the last 2 bp, likely to be a mapping error.
+	# Trim end of alignment if mismatch is in the last 2 bp, likely to be a mapping error.
+	#
 	#
 	# array	- Array of Integers from mapping with breakpoint_downstream or
 	#					breakpoint_upstream methods.
 	# mm		- Number of allowed mismatches.
 	#
-	# Returns integer of trimmed alignment array.
+	# Return integer of trimmed alignment array.
 	def trim(array, mm)
 		array = array[0..-3] if array[-2..-1] == [0,1] && mm == 1
 		array = array[0..-2] if array[-1] == 0 && mm == 1
@@ -18,13 +19,14 @@ module Alignment
 	end
 
 
-	# Extends 3' anchor to upstream genomic region.
-	# Methods uses the trim-method to remove mismatches from the alignment end.
+	# Extend 3' anchor to upstream genomic region.
+	# Use the trim-method to remove mismatches from the alignment end.
+	#
 	#
 	# ref - Reference sequence to which DNA sequence will be compared.
 	# mm  - Number of allowed mismatches.
 	#
-	# Returns integer of alignment length.
+	# Return integer of alignment length.
 	def upstream(seq, reference, mm)
 		a = []
 		mismatch = 0
@@ -41,13 +43,14 @@ module Alignment
 	end
 
 
-	# Extends 5' anchor to downstream genomic region.
-	# Methods uses the trim-method to remove mismatches from the alignment end.
+	# Extend 5' anchor to downstream genomic region.
+	# Use the trim-method to remove mismatches from the alignment end.
+	#
 	#
 	# ref - Reference sequence to which DNA sequence will be compared.
 	# mm  - Number of allowed mismatches.
 	#
-	# Returns integer of alignment length.
+	# Return integer of alignment length.
 	def downstream(seq, reference, mm)
 		a = []
 		mismatch = 0
@@ -65,11 +68,11 @@ module Alignment
 
 
 	# Create reverse complement of DNA.
-	# 
+	#
 	#
 	# dna - DNA sequence
 	#
-	# Returns reverse complement.
+	# Return reverse complement.
 	def reverse_complement(dna)
 		complement = []
 		dna.each_char do |s|
@@ -89,6 +92,15 @@ module Alignment
 	end
 	
 	
+	
+	def quality_ok?(quality, phred)
+  	quality.each_char.all? {|x| (x.ord - 33) >= phred}
+	end
+
+
+
+	# !!! Function still under development !!!
+	#
 	# Compare motif via 2bp sliding window to know U2 and U12 splice sites.
 	# Each motif pair (upstream + downstream) is scored.
 	# score += 0.5 if motif is present in acceptor or donor motis.
@@ -130,14 +142,16 @@ module Alignment
 				i = summed_scores_fwd.index {|x| x == max_fwd}
 				o = overhang - (2*i)-1
 				motif = [up_fwd[i..i+1], down_fwd[i+2..-1]]
-				{:index => i, :score => max_fwd, :strand => 1, :motif => motif.join('|'), :o => o}
+				{:index => i, :score => max_fwd, :strand => 1, :motif => motif.join('|'), \
+				 :overhang => o}
 			
 			# rev strand with higher score
 			elsif max_fwd < max_rev
 				o = overhang - 2*(i+1)
 				i = summed_scores_rev.index {|x| x == max_rev}	
 				motif = [up_rev[i..i+1], down_rev[i+2..-1]]
-				{:index => i, :score => max_rev, :strand => -1, :motif => motif.join('|'), :o => o}
+				{:index => i, :score => max_rev, :strand => -1, :motif => motif.join('|'), \
+				 :overhang => o}
 			
 			# equal scores on fwd and rev strand
 			else
@@ -149,24 +163,27 @@ module Alignment
 		 			i = i_fwd
 		 			o = overhang - 2*(i+1)
 		 			motif = [up_fwd[i..i+1], down_fwd[i+2..-1]]
-		 			{:index => i, :score => max_fwd, :strand => 0, :motif => motif.join('|'), :o => o}
+		 			{:index => i, :score => max_fwd, :strand => 0, :motif => motif.join('|'), \
+		 			 :overhang => o}
 		 		else
-		 			{:index => '-', :score => max_fwd, :strand => 0, :motif => '-', :o => overhang}
+		 			{:index => '-', :score => max_fwd, :strand => 0, :motif => '-', \
+		 			 :overhang => overhang}
 		 		end
 		 	end
 		# unknown motif	
 		else
-		 	{:index => '-', :score => '-', :strand => 0, :motif => '-', :o => overhang}
+		 	{:index => '-', :score => '-', :strand => 0, :motif => '-', :overhang => overhang}
 		end
 	end
 
 
-	# Compares number of mismatches reported by MD:Z tag to allowed number of mismatches.
+	# Compare number of mismatches reported by MD:Z tag to allowed number of mismatches.
+	#
 	#
 	# mdz - String of MD:Z tag from bowtie2 alignment.
 	# mm  - Integer of max. number of allowed mismatches.
 	#
-	# Returns boolean.
+	# Return boolean.
 	def mismatches?(mdz, mm)
 		mdz = mdz.split(':').last
 		counter = 0
@@ -175,10 +192,16 @@ module Alignment
 	end
 	
 	
-	#needs documentation
-	def genomic_mappinglength(cigar)
-		if cigar == '50M'
-			50
+	# Report genompic distance over which read mapped.
+	#
+	#
+	# cigar				- Cigar string from bowtie2 alignment.
+	# read_length	- Length of sequecning reas.
+	#
+	# Return false if insertions etc present, otherwise genomic length as interger.
+	def genomic_mappinglength(cigar, read_length)
+		if cigar == '{read_length}M'
+			read_length
 		elsif cigar.include?('N') && %w(I D S H P).all? {|x| !cigar.include?(x)}
 			cigar = cigar.split(/N|M/).collect {|x| x.to_i}
 			cigar.inject {|sum, x| sum + x}
@@ -186,7 +209,15 @@ module Alignment
 			false
 		end
 	end
-
+	
+	
+	# Check whether spliced read has mapped mate in the right position and orientation.
+	#
+	#
+	# mate1	- Mapping information for mate 1.
+	# mate2	- Mapping information for mate 2.
+	#
+	# Return false if insertions etc present, otherwise genomic length as interger.
 	def paired?(mate1, mate2)
 		mate1_chr, mate1_start, mate1_stop, mate1_strand = mate1
 		mate2_chr, mate2_start, mate2_stop, mate2_strand = mate2
@@ -197,7 +228,6 @@ module Alignment
 		conditions.push(mate1_strand != mate2_strand)
 		conditions.all? { |con| con == true }
 	end
-
 end
 
 ##########################################################################################
@@ -224,11 +254,9 @@ class ReadBam
 		@cigar = line.find {|l| l.match(/MD:Z:[[:digit:]]+/) }
 	end
 	
-	
 	def start
 		@start.to_i
 	end
-	
 	
 	def strand
 		@strand.to_i & 0x10 > 0 ? @strand = -1 : @strand = 1
@@ -320,7 +348,7 @@ module Analysis
 	extend self
 	
 	# Catch exit status of system process and report it to logfile.
-	# Exits program if subprocess was not finished successfully.
+	# Exit program if subprocess was not finished successfully.
 	#
 	#
 	# t       - Open3 object for thread.
@@ -328,7 +356,7 @@ module Analysis
 	# name    - Name for logfile.
 	# logfile - Name of logfile to write to.
 	#
-	# Returns string that is written to logfile. 
+	# Return string that is written to logfile. 
 	def system_exitcode(t, stderr, name)	
 		if t.value.success?
 			$logfile.puts "#{Time.new.strftime("%c")}: #{name} succeded."
@@ -343,7 +371,40 @@ module Analysis
 		end
 	end
  
-	def read_singletons(singletons)
+ 
+  # Convert unmapped.bam to fastq-format
+ 	# Do directly from accepted_hits.bam or from separate file??
+ 	#
+ 	#
+ 	# 
+ 	# 
+ 	#
+ 	# 
+ 	def unmapped2fastq(input_file, output_file, phred_qualit)
+ 		File.open(output_file, 'w') do |output|
+			input_file.each do |line|
+  			line = line.strip.split(/\s+/)
+  
+  			flag = line[1].to_i
+  			flag & 0x40 > 0 ? mate = '1' : mate = '2'
+  	
+  			qname, sequence, quality = line[0], line[9], line[10] 
+  			output.puts "@#{qname}/#{mate}", sequence, '+', quality if quality_ok?(quality, phred_quality)
+  		end
+  	end
+  	$logfile.puts "#{Time.new.strftime("%c")}: Converted unmapped.bam into fastq-format."	
+	end
+
+ 	
+ 	# Read singletons.
+ 	# Do directly from accepted_hits.bam or from separate file??
+ 	#
+ 	#
+ 	# singletons	- Text-file with singletons (keep as bam-file?)
+ 	# read_length	- Length of sequencing read.
+ 	#
+ 	# Return hash with all singletons, key = qname, values = mapping information.
+	def read_singletons(singletons, read_length)
 		single_reads = {}
 		
 		File.open(singletons, 'r').readlines.each do |line|
@@ -352,7 +413,7 @@ module Analysis
   		qname, flag, chr, start = line[0..3]  	
   		flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
   		cigar = line[5]
-			distance = mapping_span(cigar)
+			distance = genomic_mappinglength(cigar, read_length)
 			
 			if distance != false
 				strand == 1 ? stop = start + distance : stop = start - distance
@@ -370,7 +431,7 @@ module Analysis
 	# anchor_length - Length of anchor, default is 20 bp.
 	# output_file   - Name of output file.
 	#
-	# Returns fastq-file with anchor pairs.
+	# Return fastq-file with anchor pairs.
 	def prepare_anchorpairs(input_file, anchor_length, output_file)	
 		name, mate, seq, quality = nil
 		counter = -1
@@ -417,7 +478,7 @@ module Analysis
 	# output_file   - Name of output file
 	# logfile       - Name of logfile to write to.
 	#
-	# Returns mapped anchors in bam-format.
+	# Return mapped anchors in bam-format.
 	def bowtie_map(bowtie_index, fastq_file, output_file)
 		stdin, stdout, stderr, t = Open3.popen3("bowtie2 -x #{bowtie_index} -q -U #{fastq_file} | samtools view -bS - > #{output_file}")
 		system_exitcode(t, stderr, 'Bowtie2')
@@ -431,7 +492,7 @@ module Analysis
 	# fasta      - Path to chromsomal fasta-files.
 	# skip       - Text-file with chromsomes to skip, one/line.
 	#
-	# Returns hash with valid anchor pairs.
+	# Return hash with valid anchor pairs.
 	def process_bam(input_file, fasta, skip, distance=100000)
 
 		# general settings
@@ -479,7 +540,7 @@ module Analysis
 	end
 
 
-	# Seed extension. Anchor pairs are extended and if succesful, kept as candidates
+	# Seed extension for anchor pairs. They are kept as candidate if extension is succesful.
 	#
 	#
 	# input_hash    - Input hash with anchor pairs.
@@ -488,7 +549,7 @@ module Analysis
 	# fasta         - Path to chromsomal fasta-files.
 	#	output_file   - Name of output_file.
 	#
-	# Returns tab-delimited file with initial candidates.
+	# Return tab-delimited file with initial candidates.
 	def seed_extension(input_hash, anchor_length, read_length, fasta, output_file, mm = 1, max_overhang = read_length + 8)
 
 		output_hash = {}
@@ -532,7 +593,7 @@ module Analysis
 					end
 	
 					qname = qname.to_sym
-					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], read_length + motif_summary[:o], mate] 
+					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], read_length + motif_summary[:overhang], mate] 
 
 					# Candidates for which both, R1 and R2, are present are deleted
 					# One read can neither fall on two different non-canonical nor the same junction
@@ -545,9 +606,9 @@ module Analysis
 			end
 		end
 		
-		# remove unpaired reads if paire-end option given
+		# select reads with paired mate
 		if $sequencing_type == 'pe'
-			output_hash[qname].select {|qname, values| $singletons.has_key?(qname) && paired?(summary, $singletons[qname])}
+			output_hash[qname].select! {|qname, values| $singletons.has_key?(qname) && paired?(summary, $singletons[qname])}
 		end
 
 		File.open(output_file, 'w') do |output|
@@ -565,7 +626,7 @@ module Analysis
 	# input_file	- Input file.
 	# output_file	- Name of output_file.
 	#
-	# Returns tab-delimited file with candidate loci.
+	# Return tab-delimited file with candidate loci.
 	def collaps_qnames(input_file, output_file)
 	
 		loci = {}
@@ -604,7 +665,7 @@ module Analysis
 	# read_length - Length of sequencing read.
 	# output_file	- Name of output_file.
 	#
-	# Returns tab-delimited file with candidate loci.
+	# Return tab-delimited file with candidate loci.
 	def candidates2fa(input_file, fasta, read_length, output_file, exoncov=8)
 		chromosomes = {}
 		positions = []
@@ -654,9 +715,9 @@ module Analysis
 	# input_file - Input file.
 	# logfile    - Name of logfile to write to.
 	#
-	# Returns tab-delimited file with candidate loci.
-	def bowtie_build(input_file)
-		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} candidates")
+	# Return tab-delimited file with candidate loci.
+	def bowtie_build(input_file, prefix)
+		stdin, stdout, stderr, t = Open3.popen3("bowtie2-build -q -f #{input_file} #{prefix}")
 	system_exitcode(t, stderr, 'Building bowtie2 index')
 	end
 	
@@ -669,7 +730,7 @@ module Analysis
 	# read_length - Length of sequencing read.
 	# mm          - Number of mismatchs, default 2.	
 	#
-	# Returns tab-delimited file with candidate loci.
+	# Return tab-delimited file with candidate loci.
 	def remapped_reads(input_file, output_file, read_length, mm=2)
 		remapped = {}
 		
@@ -695,28 +756,6 @@ module Analysis
 		$logfile.puts "#{Time.new.strftime("%c")}: Found remapped reads."
 	end
 	
-# 	def read_singletons(singletons)
-# 		single_reads = {}
-# 	
-# 		File.open(singletons, 'r').readlines.each do |line|
-# 	
-# 			# initialize variables
-# 			line = line.strip.split(/\s+/)
-# 			qname, flag, chr = line[0..2]
-# 			flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
-# 			flag.to_i & 0x40 > 0 ? mate = '1' : mate = '2'
-# 			start, cigar = line[3].to_i, line[5]
-# 			distance = mapping_span(cigar)
-# 
-# 			if distance != false
-# 				# determine stop sequence
-# 				strand == '1' ? stop = start + distance : stop = start - distance
-# 				single_reads[qname] =  [chr, start, stop, strand]
-# 			end
-# 		end
-# 		single_reads
-# 	end
-	
 	
 	# Compare first mapping and remapping to get final candidates.
 	#
@@ -725,7 +764,7 @@ module Analysis
 	# after       - Name of logfile to write to.
 	# output_file - Name of output_file.
 	#
-	# Returns tab-delimited file with candidate loci.
+	# Return tab-delimited file with candidate loci.
 	def final_candidates(before, after, output_file)
 		circles = {}
 		all_ids = {}
