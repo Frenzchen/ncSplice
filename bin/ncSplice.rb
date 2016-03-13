@@ -1,20 +1,22 @@
 #!/usr/bin/env ruby
 
-# 28/02/2016
+# 13/03/2016
 # version: ruby 2.0.0
 # 
 # Wrapper script for circRNA detection.
 #
 #
 # Options (update!):
-# i - Fastq-file with unmapped reads.
-# b - Base name with which all output-files will start.
+# u - Fastq-file with unmapped reads from tophat in bam-format.
+# p - Prefix used for all output files.
 # x - Path to bowtie2-index directory and base name <index_directory>/<bt2-index>.
 # a - Length of anchors, 20 bp is recommended.
 # l - Length of read.
 # f - Path to directory with one fasta files for each chromosome.
-# c - File with chromosomes that should excluded.
+# s - File with chromosomes that should excluded.
 #			One chromosome per line.
+# singletones - File with paired reads for which only one mate mapped.
+# sequencing-type - SE or PE for single-end or paired-end.
 #
 # Remarks:
 # Implement additional option to delete intermediate files.
@@ -22,7 +24,9 @@
 
 require 'optparse'
 require 'open3'
-require_relative "../lib/lib.rb"
+require_relative "../lib/alignments.rb"
+require_relative "../lib/analysis.rb"
+require_relative "../lib/bamClass.rb"
 
 # options
 ##########################################################################################
@@ -50,7 +54,7 @@ optparse = OptionParser.new do |opts|
 	options[:sequencing] = 'se'
 	
 	opts.on('-u', '--unmapped <filename>', String, 'Bam file with unmapped reads') {|u| options[:unmapped] = u}
-  opts.on('-q', '--input-fastq <filename>', String, 'Unmapped reads in fastq format.') {|q| options[:input] = q}
+	opts.on('-q', '--quality <integer>', Integer, 'Minimal phred quality unmapped reads need to have for further analysis.') {|q| options[:phred] = q}
   opts.on('--sequencing-type <string>', String, 'Sequencing type, \'se\' for single-end and \'pe\' for paired-end sequencing, default is \'se\'') {|seq| options[:sequencing] = seq}
   opts.on('--singletons <string>', String, 'Single mapped reads, only required if sequencing-type set to \'pe\'') {|seq| options[:singletons] = seq}
   opts.on('-p', '--prefix <string>', String, 'Prefix for all files.') {|b| options[:prefix] = b}
@@ -93,7 +97,7 @@ begin
 		$singletons = Analysis.read_singletons(singletons, read_length) 
 	end
 	
-	Analysis.prepare_anchorpairs(anchor_file, anchor_length, "#{prefix}_anchors.fastq")
+	Analysis.prepare_anchorpairs("#{prefix}_unmapped.fastq", anchor_length, "#{prefix}_anchors.fastq")
 	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam")
 
 	anchor_pairs = Open3.popen3("samtools view #{prefix}.bam") do |stdin, stdout, stderr, t|

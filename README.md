@@ -96,7 +96,8 @@ Usage:
 
     -h, --help                       Display help screen.
     -v, --version                    Print ncSplice version and dependencies.
-    -q, --input-fastq <filename>     Unmapped reads in fastq format.
+    -u, --unmapped <filename>        Bam file with unmapped reads
+    -q, --quality <integer>          Minimal phred quality unmapped reads need to have for further analysis.
         --sequencing-type <string>   Sequencing type, 'se' for single-end and 'pe' for paired-end sequencing, default is 'se'
         --singletons <string>        Single mapped reads, only required if sequencing-type set to 'pe'
     -p, --prefix <string>            Prefix for all files.
@@ -105,7 +106,7 @@ Usage:
     -l, --read-length <integer>      Length of the sequencing read.
     -f, --fasta-files <directory>    Directory with chromosome fasta files, one fasta-file per chromsome.
     -s, --skip-chr <filename>        Text file with chromosomes to exclude, such as the mitochondrial chromosome (recommanded), chromosomes need to be listed in a separate text-file with one chromosome per line.
-
+    
 ## To do
 
 1. Implement single-end/paired-end option
@@ -118,6 +119,7 @@ Usage:
   - potential errors
 5. Write tests
 6. Make gem
+7. Clean-up fusion detection and implement scripts
 
 ## Authors
 Franziska Gruhl, franziska.gruhl@isb-sib.ch
