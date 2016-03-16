@@ -33,13 +33,13 @@ module Analysis
  
  
   # Convert unmapped.bam to fastq-format
- 	# Do directly from accepted_hits.bam or from separate file??
  	#
  	#
- 	# 
- 	# 
+ 	# input_file		- Unmapped reads from tophat in bam format.
+ 	# output_file		-	Name of output file (in fastq).
+ 	# phred_quality	- Minimal phredquality for read to be kept.
  	#
- 	# 
+ 	# Unmapped reads in fastq format.
  	def bam2fastq(input_file, output_file, phred_quality)
  		File.open(output_file, 'w') do |output|
 			input_file.each do |line|
@@ -54,34 +54,6 @@ module Analysis
   	end
   	$logfile.puts "#{Time.new.strftime("%c")}: Converted unmapped.bam into fastq-format."	
 	end
-
- 	
- 	# Read singletons.
- 	# Do directly from accepted_hits.bam or from separate file??
- 	#
- 	#
- 	# singletons	- Text-file with singletons (keep as bam-file?)
- 	# read_length	- Length of sequencing read.
- 	#
- 	# Return hash with all singletons, key = qname, values = mapping information.
-	def read_singletons(singletons, read_length)
-		single_reads = {}
-		
-		File.open(singletons, 'r').readlines.each do |line|
-  
-  		line = line.strip.split(/\s+/)
-  		qname, flag, chr, start = line[0..3]  	
-  		flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
-  		cigar = line[5]
-			distance = genomic_mappinglength(cigar, read_length)
-			
-			if distance != false
-				strand == 1 ? stop = start + distance : stop = start - distance
-				single_reads[qname] = [chr, start, stop, strand]
-			end
-		end
-		single_reads
-	end
 	
 	
 	# Prepare fastq-file with anchors from unmapped.fastq.
@@ -92,7 +64,7 @@ module Analysis
 	# output_file   - Name of output file.
 	#
 	# Return fastq-file with anchor pairs.
-	def prepare_anchorpairs(input_file, anchor_length, output_file, sequencing_type)	
+	def prepare_anchorpairs(input_file, anchor_length, output_file)	
 		name, mate, seq, quality = nil
 		counter = -1
 
@@ -102,7 +74,7 @@ module Analysis
 				line = line.strip
 			
 				if counter % 4 == 0 
-					name, mate = line, '1'
+					name, mate = line.split('/')
 					
 				elsif counter % 4 == 1
 					seq = line
@@ -241,7 +213,7 @@ module Analysis
 					downstream_breakpoint = downstream_start + downstream_alignmentlength - 1
 					overhang = total_alignmentlength - read_length
 	
-					qname = qname.to_sym 
+					qname = qname.to_sym
 					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, mate] 
 					
 					# Candidates for which both, R1 and R2, are present are deleted
@@ -254,7 +226,7 @@ module Analysis
 				end
 			end
 		end
-
+		
 		File.open(output_file, 'w') do |output|
 			output_hash.each do |qname, v| 
 				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= read_length
@@ -447,7 +419,7 @@ module Analysis
 			k1, k2 = qname.split(':')[3..4]
 
 			read_unused = (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname)) 
-			
+						
 			# Add read if read is not already used (condition 2)
 			if circles.has_key?(pos) && read_unused 
 				circles[pos][:counts] += 1

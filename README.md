@@ -41,7 +41,7 @@ The detection of circRNAs, intra- and inter-chromosomal fusion follows similar s
 
    Take a fastq-file, which contains the unmapped reads and prepare an output fastq-file with corresponding anchors. A new qname is created, which is based on the original qname, the mate information, the read itself and the terminus A or B showing which side of the read was taken (A = left, B = right): 
 
-    > @HWI-D00108:213:C3U67ACXX:1:1106:5218:96673\_1\_...TTTCTGTGAG...\_A
+    > @HWI-D00108:213:C3U67ACXX:1:1106:5218:96673_1_...TTTCTGTGAG..._A
 
 2. 1st mapping round
 
@@ -88,7 +88,7 @@ ncSplice currently only supports unstranded library types and runs in single-end
 ncSplice was developed based on the tophat output, which will by default created two bam files: accepted_hits.bam and unmapped.bam. For the further analysis, unmapped reads have to be converted into fast-format. This can be done via the helper script `readPreparation.rb`. This step is not necessary if the unmapped reads are already in fastq-format.
 
 Usage: 
-```ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]```
+```ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -c <chromsomes>/*.fa -s <exclude.txt> [options]```
 
     -h, --help                       Display help screen.
     -v, --version                    Print ncSplice version and dependencies.

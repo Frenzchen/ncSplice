@@ -34,7 +34,7 @@ require_relative "../lib/bamClass.rb"
 options = {}
 optparse = OptionParser.new do |opts|
   opts.banner = "ncSplice version 0.0.0 by Franziska Gruhl (franziska.gruhl@isb-sib.ch)\n
-  Usage: ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]"
+  Usage: ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -c <chromsomes>/*.fa -s <exclude.txt> [options]"
 
   opts.on('-h', '--help', 'Display help screen.') do
     puts opts
@@ -49,15 +49,15 @@ optparse = OptionParser.new do |opts|
     exit
   end
 
-	options[:phred] = 25
-	options[:anchor] = 20
-	options[:sequencing] = 'se'
-	options[:library] = 'fr-unstranded'
+  options[:phred] = 25
+  options[:anchor] = 20
+  options[:sequencing] = 'se'
+  options[:library] = 'fr-unstranded'
 	
-	opts.on('-u', '--unmapped <filename>', String, 'fastq file with unmapped reads') {|u| options[:unmapped] = u}
-	opts.on('-q', '--quality <integer>', Integer, 'Minimal phred quality unmapped reads need to have for further analysis.') {|q| options[:phred] = q}
-	opts.on('--sequencing-type <string>', String, 'Sequencing type, currently only single-end librariers supported') {|seq| options[:sequencing] = seq}
-  opts.on('--library-type <string>', String, 'Library type, currently only unstranded libraries supported') {|lib| options[:library] = lib}
+ 	opts.on('-u', '--unmapped <filename>', String, 'fastq file with unmapped reads') {|u| options[:unmapped] = u}
+ 	opts.on('-q', '--quality <integer>', Integer, 'Minimal phred quality unmapped reads need to have for further analysis.') {|q| options[:phred] = q}
+ 	opts.on('--sequencing-type <string>', String, 'Sequencing type, currently only single-end librariers supported') {|seq| options[:sequencing] = seq}
+	opts.on('--library-type <string>', String, 'Library type, currently only unstranded libraries supported') {|lib| options[:library] = lib}
   opts.on('-p', '--prefix <string>', String, 'Prefix for all files.') {|b| options[:prefix] = b}
   opts.on('-x', '--bowtie-index <directory>', String, 'Bowtie-index diretory and base name: <index-directory>/<bt2-index>.') {|x| options[:bowtie] = x}
   opts.on('-a', '--anchor-length <integer>', Integer, 'Length of the read anchor for remapping, default is 20 bp, shorter anchors will decrease the mapping precision and longer anchors will cause a reduction in candidates.') {|a| options[:anchor] = a}
@@ -88,29 +88,29 @@ $logfile = File.open("#{prefix}_logfile.log", 'w')
 # run
 ##########################################################################################
 
-begin
+begin	
 	Analysis.prepare_anchorpairs(unmapped_reads, anchor_length, "#{prefix}_anchors.fastq")
-	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam")
-
-	anchor_pairs = Open3.popen3("samtools view #{prefix}.bam") do |stdin, stdout, stderr, t|
-		Analysis.process_bam(stdout, chromosome_files, skip)
-	end
-
-	Analysis.seed_extension(anchor_pairs, anchor_length, read_length, chromosome_files, "#{prefix}_candidateReads.txt")	
-	Analysis.collaps_qnames("#{prefix}_candidateReads.txt", "#{prefix}_candidates.txt")
-	Analysis.candidates2fa("#{prefix}_candidates.txt", chromosome_files, read_length, "#{prefix}_faIndex.fa")
-	Analysis.bowtie_build("#{prefix}_faIndex.fa", "#{prefix}")
-	
-	Open3.popen3("mkdir #{prefix}_index") if !Dir.exists?("#{prefix}_index")
-	Open3.popen3("mv #{prefix}_faIndex.fa #{prefix}_index/; mv *bt2 #{prefix}_index/")
-	
-	Analysis.bowtie_map("#{prefix}_index/#{prefix}", unmapped_reads, "#{prefix}_remapping.bam")
-
-	Open3.popen3("samtools view #{prefix}_remapping.bam") do |stdin, stdout, stderr, t|
-		Analysis.remapped_reads(stdout, "#{prefix}_remapped.txt", read_length)
-	end
-	
-	Analysis.final_candidates("#{prefix}_candidates.txt", "#{prefix}_remapped.txt", "#{prefix}_final.txt")
+ 	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam")
+ 
+ 	anchor_pairs = Open3.popen3("samtools view #{prefix}.bam") do |stdin, stdout, stderr, t|
+ 		Analysis.process_bam(stdout, chromosome_files, skip)
+ 	end
+ 
+ 	Analysis.seed_extension(anchor_pairs, anchor_length, read_length, chromosome_files, "#{prefix}_candidateReads.txt")	
+ 	Analysis.collaps_qnames("#{prefix}_candidateReads.txt", "#{prefix}_candidates.txt")
+ 	Analysis.candidates2fa("#{prefix}_candidates.txt", chromosome_files, read_length, "#{prefix}_faIndex.fa")
+ 	Analysis.bowtie_build("#{prefix}_faIndex.fa", "#{prefix}")
+ 	
+ 	Open3.popen3("mkdir #{prefix}_index") if !Dir.exists?("#{prefix}_index")
+ 	Open3.popen3("mv #{prefix}_faIndex.fa #{prefix}_index/; mv *bt2 #{prefix}_index/")
+ 	
+ 	Analysis.bowtie_map("#{prefix}_index/#{prefix}", unmapped_reads, "#{prefix}_remapping.bam")
+ 
+ 	Open3.popen3("samtools view #{prefix}_remapping.bam") do |stdin, stdout, stderr, t|
+ 		Analysis.remapped_reads(stdout, "#{prefix}_remapped.txt", read_length)
+ 	end
+ 	
+ 	Analysis.final_candidates("#{prefix}_candidates.txt", "#{prefix}_remapped.txt", "#{prefix}_final.txt")
 	
 rescue StandardError => err
 	$logfile.puts "#{Time.new}: Error in ncSplice.rb"
