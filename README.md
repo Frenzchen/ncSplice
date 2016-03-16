@@ -84,42 +84,34 @@ ncSplice will for sure not work on versions < 1.9.2. These versions do not conta
 
 
 ## How to run ncSpice
-
-ncSplice was developed based on the tophat output, which will by default created two bam files: accepted_hits.bam and unmapped.bam. For the further analysis, unmapped reads have to be converted into fast-format. This can be done via the helper script `unmapped2fq.rb`. If analysis should be run in paired-end format an additional file of singletons needs to be provided. This file can be obtained by using SAMtools:
-
-```samtools view -f 0x08 accepted_hits.bam > singletons.txt```
-
-The `0x08` flag will filter for reads for which the partner could not be mapped, and thus is found in the unmapped fraction.
+ncSplice currently only supports unstranded library types and runs in single-end modus. Paired-end modus and stranded library options are under development.
+ncSplice was developed based on the tophat output, which will by default created two bam files: accepted_hits.bam and unmapped.bam. For the further analysis, unmapped reads have to be converted into fast-format. This can be done via the helper script `readPreparation.rb`. This step is not necessary if the unmapped reads are already in fastq-format.
 
 Usage: 
-```ncSplice.rb -q <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]```
+```ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]```
 
     -h, --help                       Display help screen.
     -v, --version                    Print ncSplice version and dependencies.
-    -u, --unmapped <filename>        Bam file with unmapped reads
+    -u, --unmapped <filename>        fastq file with unmapped reads
     -q, --quality <integer>          Minimal phred quality unmapped reads need to have for further analysis.
-        --sequencing-type <string>   Sequencing type, 'se' for single-end and 'pe' for paired-end sequencing, default is 'se'
-        --singletons <string>        Single mapped reads, only required if sequencing-type set to 'pe'
+        --sequencing-type <string>   Sequencing type, currently only single-end librariers supported
+        --library-type <string>      Library type, currently only unstranded libraries supported
     -p, --prefix <string>            Prefix for all files.
     -x, --bowtie-index <directory>   Bowtie-index diretory and base name: <index-directory>/<bt2-index>.
     -a, --anchor-length <integer>    Length of the read anchor for remapping, default is 20 bp, shorter anchors will decrease the mapping precision and longer anchors will cause a reduction in candidates.
     -l, --read-length <integer>      Length of the sequencing read.
-    -f, --fasta-files <directory>    Directory with chromosome fasta files, one fasta-file per chromsome.
-    -s, --skip-chr <filename>        Text file with chromosomes to exclude, such as the mitochondrial chromosome (recommanded), chromosomes need to be listed in a separate text-file with one chromosome per line.
+    -c <directory>,                  Directory with chromosome fasta files, one fasta-file per chromosome.
+        --chromosome-files
+    -s, --skip-chr <filename>        Text file with chromosomes to exclude, such as the mitochondrial chromosome (recommanded), chromosomes need to be listed in a separate text-file with one chromosome per line.    
     
 ## To do
 
-1. Implement single-end/paired-end option
-  - need to check whether everything works with paired-end-option
-2. Clean up motif scoring to trim alignments, needs to be implement in downstream analysis after seed-extension 
-3. Write documentation for all functions
-4. Write overall documentation
-  - versions
-  - how to run
-  - potential errors
-5. Write tests
-6. Make gem
-7. Clean-up fusion detection and implement scripts
+1. Implementation of
+	- paired-end option
+  - different library options
+2. Write overall documentation
+  - document potential errors
+3. Conversion to ruby gem
 
 ## Authors
 Franziska Gruhl, franziska.gruhl@isb-sib.ch

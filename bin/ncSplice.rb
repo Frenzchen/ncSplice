@@ -34,7 +34,7 @@ require_relative "../lib/bamClass.rb"
 options = {}
 optparse = OptionParser.new do |opts|
   opts.banner = "ncSplice version 0.0.0 by Franziska Gruhl (franziska.gruhl@isb-sib.ch)\n
-  Usage: ncSplice.rb -q <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]"
+  Usage: ncSplice.rb -u <unmapped.fastq> -p <prefix> -x <index-directory>/<bt2-index> -a <anchor-length> -l <read-length> -f <chromsomes>/*.fa -c <exclude.txt> [options]"
 
   opts.on('-h', '--help', 'Display help screen.') do
     puts opts
@@ -52,36 +52,36 @@ optparse = OptionParser.new do |opts|
 	options[:phred] = 25
 	options[:anchor] = 20
 	options[:sequencing] = 'se'
+	options[:library] = 'fr-unstranded'
 	
-	opts.on('-u', '--unmapped <filename>', String, 'Bam file with unmapped reads') {|u| options[:unmapped] = u}
+	opts.on('-u', '--unmapped <filename>', String, 'fastq file with unmapped reads') {|u| options[:unmapped] = u}
 	opts.on('-q', '--quality <integer>', Integer, 'Minimal phred quality unmapped reads need to have for further analysis.') {|q| options[:phred] = q}
-  opts.on('--sequencing-type <string>', String, 'Sequencing type, \'se\' for single-end and \'pe\' for paired-end sequencing, default is \'se\'') {|seq| options[:sequencing] = seq}
-  opts.on('--singletons <string>', String, 'Single mapped reads, only required if sequencing-type set to \'pe\'') {|seq| options[:singletons] = seq}
+	opts.on('--sequencing-type <string>', String, 'Sequencing type, currently only single-end librariers supported') {|seq| options[:sequencing] = seq}
+  opts.on('--library-type <string>', String, 'Library type, currently only unstranded libraries supported') {|lib| options[:library] = lib}
   opts.on('-p', '--prefix <string>', String, 'Prefix for all files.') {|b| options[:prefix] = b}
   opts.on('-x', '--bowtie-index <directory>', String, 'Bowtie-index diretory and base name: <index-directory>/<bt2-index>.') {|x| options[:bowtie] = x}
   opts.on('-a', '--anchor-length <integer>', Integer, 'Length of the read anchor for remapping, default is 20 bp, shorter anchors will decrease the mapping precision and longer anchors will cause a reduction in candidates.') {|a| options[:anchor] = a}
   opts.on('-l', '--read-length <integer>', Integer, 'Length of the sequencing read.') {|l| options[:readlength] = l}  
-  opts.on('-f', '--fasta-files <directory>', 'Directory with chromosome fasta files, one fasta-file per chromsome.') {|f| options[:fasta] = f}
+  opts.on('-c', '--chromosome-files <directory>', 'Directory with chromosome fasta files, one fasta-file per chromosome.') {|c| options[:chromosomes] = c}
   opts.on('-s', '--skip-chr <filename>', String, 'Text file with chromosomes to exclude, such as the mitochondrial chromosome (recommanded), chromosomes need to be listed in a separate text-file with one chromosome per line.') {|s| options[:skip] = s}
 end
 
 optparse.parse!(ARGV)
-optparse.parse!(ARGV << '-h') if options.length <= 6
+optparse.parse!(ARGV << '-h') if options.length <= 7
 
 # local
-unampped_bam = options[:unmapped]
+unmapped_reads = options[:unmapped]
 phred_quality = options[:phred]
-anchor_file = options[:input]
+sequencing_type = options[:sequencing]
+library_type = options[:library]
 prefix = options[:prefix]
 bowtie_index = options[:bowtie]
 anchor_length = options[:anchor]
 read_length = options[:readlength]
-options[:fasta][-1] == '/' ? fasta = options[:fasta] : fasta = "#{options[:fasta]}/"
+options[:chromosomes][-1] == '/' ? chromosome_files = options[:chromosomes] : chromosome_files = "#{options[:chromosomes]}/"
 skip = options[:skip]
-singletons = options[:singletons]
 
 # global
-$sequencing_type = options[:sequencing]
 $logfile = File.open("#{prefix}_logfile.log", 'w')
 
 
@@ -89,36 +89,28 @@ $logfile = File.open("#{prefix}_logfile.log", 'w')
 ##########################################################################################
 
 begin
-	Open3.popen3("samtools view #{unmapped_bam}") do |stdin, stdout, stderr, t|
-		Analysis.unmapped2fastq(stdout, "#{prefix}_unmapped.fastq", phred_quality)
-	end
-	
-	if $sequencing_type == 'pe'
-		$singletons = Analysis.read_singletons(singletons, read_length) 
-	end
-	
-	Analysis.prepare_anchorpairs("#{prefix}_unmapped.fastq", anchor_length, "#{prefix}_anchors.fastq")
+	Analysis.prepare_anchorpairs(unmapped_reads, anchor_length, "#{prefix}_anchors.fastq")
 	Analysis.bowtie_map(bowtie_index, "#{prefix}_anchors.fastq", "#{prefix}.bam")
 
 	anchor_pairs = Open3.popen3("samtools view #{prefix}.bam") do |stdin, stdout, stderr, t|
-		Analysis.process_bam(stdout, fasta, skip)
+		Analysis.process_bam(stdout, chromosome_files, skip)
 	end
 
-	Analysis.seed_extension(anchor_pairs, anchor_length, read_length, fasta, "#{prefix}_candidateReads.txt")	
+	Analysis.seed_extension(anchor_pairs, anchor_length, read_length, chromosome_files, "#{prefix}_candidateReads.txt")	
 	Analysis.collaps_qnames("#{prefix}_candidateReads.txt", "#{prefix}_candidates.txt")
-	Analysis.candidates2fa("#{prefix}_candidates.txt", fasta, read_length, "#{prefix}_faIndex.fa")
+	Analysis.candidates2fa("#{prefix}_candidates.txt", chromosome_files, read_length, "#{prefix}_faIndex.fa")
 	Analysis.bowtie_build("#{prefix}_faIndex.fa", "#{prefix}")
 	
 	Open3.popen3("mkdir #{prefix}_index") if !Dir.exists?("#{prefix}_index")
 	Open3.popen3("mv #{prefix}_faIndex.fa #{prefix}_index/; mv *bt2 #{prefix}_index/")
 	
-	Analysis.bowtie_map("#{prefix}_index/#{prefix}", anchor_file, "#{prefix}_remapping.bam")
+	Analysis.bowtie_map("#{prefix}_index/#{prefix}", unmapped_reads, "#{prefix}_remapping.bam")
 
 	Open3.popen3("samtools view #{prefix}_remapping.bam") do |stdin, stdout, stderr, t|
 		Analysis.remapped_reads(stdout, "#{prefix}_remapped.txt", read_length)
 	end
 	
-	Analysis.final_candidates("#{prefix}_candidates.txt",  "#{prefix}_remapped.txt", "#{prefix}_final.txt")
+	Analysis.final_candidates("#{prefix}_candidates.txt", "#{prefix}_remapped.txt", "#{prefix}_final.txt")
 	
 rescue StandardError => err
 	$logfile.puts "#{Time.new}: Error in ncSplice.rb"

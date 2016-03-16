@@ -40,14 +40,14 @@ module Analysis
  	# 
  	#
  	# 
- 	def unmapped2fastq(input_file, output_file, phred_qualit)
+ 	def bam2fastq(input_file, output_file, phred_quality)
  		File.open(output_file, 'w') do |output|
 			input_file.each do |line|
   			line = line.strip.split(/\s+/)
   
   			flag = line[1].to_i
   			flag & 0x40 > 0 ? mate = '1' : mate = '2'
-  	
+  			
   			qname, sequence, quality = line[0], line[9], line[10] 
   			output.puts "@#{qname}/#{mate}", sequence, '+', quality if quality_ok?(quality, phred_quality)
   		end
@@ -92,7 +92,7 @@ module Analysis
 	# output_file   - Name of output file.
 	#
 	# Return fastq-file with anchor pairs.
-	def prepare_anchorpairs(input_file, anchor_length, output_file)	
+	def prepare_anchorpairs(input_file, anchor_length, output_file, sequencing_type)	
 		name, mate, seq, quality = nil
 		counter = -1
 
@@ -102,8 +102,8 @@ module Analysis
 				line = line.strip
 			
 				if counter % 4 == 0 
-					name, mate = line.split('/')
-
+					name, mate = line, '1'
+					
 				elsif counter % 4 == 1
 					seq = line
 				
@@ -240,20 +240,8 @@ module Analysis
 					upstream_breakpoint = upstream_start - upstream_alignmentlength + anchor_length	
 					downstream_breakpoint = downstream_start + downstream_alignmentlength - 1
 					overhang = total_alignmentlength - read_length
-
-					# splice site analysis
-					#up = upstream_dna[-upstream_alignmentlength..-1]
-					#down = downstream_dna[0..downstream_alignmentlength-1]	
-					#motif_summary = Alignment.score_motifs(up, down, overhang)
-
-					#if motif_summary[:index].kind_of?(Integer)
-					#	i = motif_summary[:index]
-					#	upstream_breakpoint = upstream_breakpoint + i + 2
-					#	downstream_breakpoint = downstream_breakpoint - overhang + i + 2
-					#end
 	
-					qname = qname.to_sym
-					#summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, motif_summary[:score], motif_summary[:strand], motif_summary[:motif], read_length + motif_summary[:overhang], mate] 
+					qname = qname.to_sym 
 					summary = [chr, upstream_breakpoint, downstream_breakpoint, strand, total_alignmentlength, mate] 
 					
 					# Candidates for which both, R1 and R2, are present are deleted
@@ -265,11 +253,6 @@ module Analysis
 					end
 				end
 			end
-		end
-		
-		# select reads with paired mate
-		if $sequencing_type == 'pe'
-			output_hash[qname].select! {|qname, values| $singletons.has_key?(qname) && paired?(summary, $singletons[qname])}
 		end
 
 		File.open(output_file, 'w') do |output|
@@ -464,11 +447,6 @@ module Analysis
 			k1, k2 = qname.split(':')[3..4]
 
 			read_unused = (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname)) 
-			
-			if $sequencing_type == 'pe'
-				qname = qname.split('/').first
-				next if !$singletons.has_key?(qname) || !paired?(summary, $singletons[qname])
-			end
 			
 			# Add read if read is not already used (condition 2)
 			if circles.has_key?(pos) && read_unused 
