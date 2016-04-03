@@ -111,11 +111,16 @@ module Alignment
 	# mm  - Integer of max. number of allowed mismatches.
 	#
 	# Return boolean.
-	def mismatches?(mdz, mm)
+	def max_mismatches?(mdz, mm)
 		mdz = mdz.split(':').last
 		counter = 0
-		%w[A T G C].each {|x| counter += mdz.count(x) if !mdz.nil?}
-		counter > mm
+		
+		if !mdz.nil?
+			%w[A T G C].each {|x| counter += mdz.count(x) }
+			counter <= mm
+		else
+			FALSE
+		end
 	end
 	
 	
