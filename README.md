@@ -1,3 +1,5 @@
+-- still under construction --
+
 [Bowtie1]: http://bowtie-bio.sourceforge.net/index.shtml
 [Bowtie2]: http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
 [SAMtools]: http://samtools.sourceforge.net/
@@ -113,6 +115,6 @@ Usage:
 3. Conversion to ruby gem
 
 ## Authors
-Franziska Gruhl, franziska.gruhl@isb-sib.ch
+Franziska Gruhl, franziska.gruhl@sib.swiss
 
-Mar 2016
+Apr 2016
