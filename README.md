@@ -37,37 +37,29 @@ Currently, the detection works for unstranded, single-end Illumina sequencing da
 
 
 ### Detection
-The detection of circRNAs, intra- and inter-chromosomal fusion follows similar steps with adaptations for each of the different splice types. The general outline is:
+The detection of circRNAs, intra- and inter-chromosomal fusion follows similar steps with adaptations for each of the different splicing types. The general outline is:
 
-1. Creation of anchors from unmapped reads
+##### 1. Creation of anchors from unmapped reads
+Take a fastq-file, which contains the unmapped reads and prepare an output fastq-file with corresponding anchors. A new qname is created, which is based on the original qname, the mate information (1 for single-end data), the read itself and a terminal A or B to show from which side of the read the anchor was taken (A = left, B = right): ```@HWI-D00108:213:C3U67ACXX:1:1106:5218:96673_1_...TTTCTGTGAG..._A```
 
-   Take a fastq-file, which contains the unmapped reads and prepare an output fastq-file with corresponding anchors. A new qname is created, which is based on the original qname, the mate information (1 for single-end data), the read itself and a terminal A or B to show from which side of the read the anchor was taken (A = left, B = right): 
+##### 2. 1st mapping round
+Anchor mapping with bowtie2, output sorted according to read name.
 
-    ```@HWI-D00108:213:C3U67ACXX:1:1106:5218:96673_1_...TTTCTGTGAG..._A```
+##### 3. Seed extension
+Reads are read from the bowtie2 output bam-file. Each anchor pair is evaluated to see whether anchor pairs fulfill the splice type conditions (see Introduction). If so, the anchors are extended. A maximum of 1 mismatch on each of the sides is allowed. If the read can be fully extended, it is written to the output file. Reads for which R1 and R2 fall on the same or different junction are removed.
 
-2. 1st mapping round
+##### 4. Collision of reads on candidate loci
 
-   Anchor mapping with bowtie2, output sorted according to read name.
+##### 5. Conversion of loci into fasta format
+Conversion of breakpoint into fasta-format by joining 100 bp up- and downstream from the breakpoint.
 
-3. Seed extension
+##### 6. 2nd remapping round on junction index
+An index based on the detected junctions is created and all unmapped reads are remapped to find reads that span these junctions with less than 20 bp (but at least 8 bp).
 
-   Reads are read from the bowtie2 output bam-file. Each anchor pair is evaluated to see whether anchor pairs fulfill the splice type conditions (see Introduction). If so, the anchors are extended. A maximum of 1 mismatch on each of the sides is allowed. If the read can be fully extended, it is written to the output file. Reads for which R1 and R2 fall on the same or different junction are removed.
+##### 7. Filtering of remapped reads and final candidate list
+Uniquely remapped reads with a maximum of 2 mismatches are added to the first candidate list (if not already used).
 
-4. Collision of reads on candidate loci
-
-5. Conversion of loci into fasta format
-
-   Conversion of breakpoint into fasta-format by joining 100 bp up- and downstream from the breakpoint.
-
-6. 2nd remapping round on junction index
-
-   An index based on the detected junctions is created and all unmapped reads are remapped to find reads that span these junctions with less than 20 bp (but at least 8 bp).
-
-7. Filtering of remapped reads and final candidate list
-
-   Uniquely remapped reads with a maximum of 2 mismatches are added to the first candidate list (if not already used).
-
-8. A post-filtering step should be applied to remove low-coverage junctions and extreme outliers.
+##### 8. A post-filtering step should be applied to remove low-coverage junctions and extreme outliers.
 
 
 
@@ -85,7 +77,7 @@ The ncSplice was developed on ruby 2.0.0. The latest ruby version can be downloa
 ncSplice will not work on versions < 1.9.2. These versions do not contain the built-in method `require_relative`, which is used in ncSplice.
 
 
-## How to run ncSpice
+## How to run ncSplice
 ncSplice was developed based on the tophat output, which will by default create two bam files: accepted_hits.bam and unmapped.bam. For the further analysis, unmapped reads have to be converted into fastq-format. This can be done via the helper script `readPreparation.rb`. This step is not necessary if the unmapped reads are already in fastq-format. (add: how should fastq file look like)
 
 Usage: 
@@ -111,10 +103,10 @@ Usage:
 	- paired-end option
  	- different library options
 2. Write overall documentation
-  - document potential errors
+ 	- document potential errors
 3. Conversion to ruby gem
 
 ## Authors
-Franziska Gruhl, franziska.gruhl@sib.swiss
+Franziska Gruhl, franziska.gruhl@unil.ch
 
 Apr 2016
