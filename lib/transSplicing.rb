@@ -253,9 +253,9 @@ module TransSplice
 				dna_a = fasta_file.read.gsub(/\n/, '')
 				
 				values.each do |chr_b, values|
-				  fasta = File.open("#{fasta}#{chr_b}.fa", 'r')
-					header = fasta.gets.strip
-					dna_b = fasta.read.gsub(/\n/, '')
+				  fasta_file = File.open("#{fasta}#{chr_b}.fa", 'r')
+					header = fasta_file.gets.strip
+					dna_b = fasta_file.read.gsub(/\n/, '')
 
 					values.each do |v|
 						bp_a, bp_b = v[1].to_i, v[4].to_i
