@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require_relative "./bamClass.rb"
+require_relative "./alignments.rb"
 
 module CircRNA
 
@@ -61,7 +62,7 @@ module CircRNA
 			next if item == '.' || item == '..' || exclude.include?(chr)  
 			input_hash[chr] = []
 		end
-
+		
 		# read bam file
 		input_file.each do |line|
 			line = line.strip.split(/\s+/)
@@ -102,9 +103,9 @@ module CircRNA
 	#	output_file   - Name of output_file.
 	#
 	# Return tab-delimited file with initial candidates.
-	def seed_extension(input_hash, anchor_length, read_length, fasta, output_file, mm = 1, max_overhang = read_length + 8)
+	def seed_extension(input_hash, anchor_length, read_length, fasta, sequencing_type, output_file, mm = 1, max_overhang = read_length + 8)
 
-		output_hash = {}
+		candidates = {}
 	
 		input_hash.each do |chr, anchorpairs|
 			chr = chr.to_s
@@ -126,31 +127,38 @@ module CircRNA
 				upstream_alignmentlength = Alignment.upstream(read, upstream_dna, mm)
 				downstream_alignmentlength = Alignment.downstream(read, downstream_dna, mm)
 				total_alignmentlength = upstream_alignmentlength + downstream_alignmentlength
+				
+				upstream_breakpoint = upstream.start - upstream_alignmentlength + anchor_length	
+				downstream_breakpoint = downstream.start + downstream_alignmentlength - 1
 
-				if total_alignmentlength >= read_length && total_alignmentlength <= max_overhang
-					upstream_breakpoint = upstream.start - upstream_alignmentlength + anchor_length	
-					downstream_breakpoint = downstream.start + downstream_alignmentlength - 1
+				mapping_conditions = [total_alignmentlength >= read_length, total_alignmentlength <= max_overhang, (downstream_breakpoint - upstream_breakpoint).abs >= read_length]
+				
+				if mapping_conditions.all? {|condition| condition == true}
 					overhang = total_alignmentlength - read_length
-	
-					qname = qname.to_sym
+					summary = [upstream.chr, upstream_breakpoint, downstream_breakpoint, upstream.strand, total_alignmentlength, 'se', mate] 
 					
-					summary = [upstream.chr, upstream_breakpoint, downstream_breakpoint, upstream.strand, total_alignmentlength, mate] 
+					if !candidates.has_key?(qname)
+						candidates[qname] = summary 
 					
-					
-					# Candidates for which both, R1 and R2, are present are deleted
-					# One read can neither fall on two different non-canonical nor the same junction
-					if !output_hash.has_key?(qname)
-						output_hash[qname] = summary
+					# R1 and R2 are deleted if both are present, but fall on different junctions
 					else
-						output_hash.delete(qname)
+						same_pos = candidates[qname][0..2] == summary[0..2]
+						diff_strand = candidates[qname][3] != summary[3]
+						diff_mate = candidates[qname][-1] != summary[-1]
+						#$stdout.puts [same_pos, diff_mate].join("\t")
+						if same_pos && diff_strand && diff_mate
+							candidates[qname][-2] = 'pe'
+						else 
+							candidates.delete(qname)
+						end
 					end
 				end
 			end
 		end
 		
 		File.open(output_file, 'w') do |output|
-			output_hash.each do |qname, v| 
-				output.puts ["#{qname.to_s}/#{v[-1]}", v[0..-2]].join("\t") if v[2] - v[1] >= read_length
+			candidates.each do |qname, v| 
+				output.puts ["#{qname}/#{v[-1]}", v[0..-2]].join("\t") 
 			end
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Seed extension succeded."
@@ -175,19 +183,21 @@ module CircRNA
 			base = qname.gsub(/\/[1,2]/, '')
 			pos = line[1..3].join(':')
 			alignment_length = line[5]
-	
+			support = line[-1]
+			
 			if !loci.has_key?(pos)
-				loci[pos] = {:count => 1, :qnames => [qname], :l => alignment_length}
+				loci[pos] = {:count => 1, :qnames => [qname], :l => alignment_length, :type => support}
 			else 
 				loci[pos][:qnames] << qname
 				loci[pos][:count] += 1
+				loci[pos][:type] = support if support == 'pe'
 			end
 		end
 
 		# Output
 		File.open(output_file, 'w') do |output|
 			loci.each do |pos, v| 
-				output.puts [pos.split(':'), v[:count], v[:l], v[:qnames].join(';')].join("\t") if v[:count] > 0
+				output.puts [pos.split(':'), v[:count], v[:l], v[:type], v[:qnames].join(';')].join("\t") if v[:count] > 0
 			end
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Collapsed anchor pairs to single loci."
@@ -209,7 +219,7 @@ module CircRNA
 		
 		# Input into hash sorted by chromosomes
 		File.open(input_file, 'r').readlines.each do |line|
-			line = line.strip.split("\t")[0..-2]
+			line = line.strip.split("\t")[0..-3]
 			pos = line[0..2].join(':')
 			chr = line[0]
 	
@@ -254,32 +264,65 @@ module CircRNA
 	# mm          - Number of mismatchs, default 2.	
 	#
 	# Return tab-delimited file with candidate loci.
-	def remapped_reads(input_file, output_file, read_length, mm=2)
+	def remapped_reads(input_file, output_file, read_length, sequencing_type, mm=2)
 		remapped = {}
-		
+
 		# Filter remapped reads
 		input_file.each do |line|
 			mdz = line.match(/MD:Z:\S*/).to_s			
 			line = line.strip.split(/\s+/)
-			qname, mate = line[0].split('/')
-
+			qname, mate = line[0].split('/')[0..1].join('/'), line[0].split('/')[-1]
+			flag = line[1].to_i
+			
+			flag & 0x10 > 0 ? strand = -1 : strand = 1
 			pos = line[2].split(':')
 			cigar = line[5]
-
-			if !remapped.has_key?(qname) && Alignment.max_mismatches?(mdz, mm) && cigar == "#{read_length}M"
-				remapped[qname] = [pos, mate]
-			else
-				remapped.delete(qname)
+			
+			if Alignment.max_mismatches?(mdz, mm) && cigar == "#{read_length}M"
+				if !remapped.has_key?(qname)
+					remapped[qname] = [pos, strand, 'se', mate]
+				else
+					
+					# if second mate is unmapped, then chr/start/stop need to be the same and strand/mate need to be opposite
+					if remapped[qname][0] == pos && remapped[qname][1] != strand && remapped[qname][-1] != mate
+						remapped[qname][2] = 'pe'
+					else
+						remapped.delete(qname)
+					end
+				end
 			end
 		end
 
+		if sequencing_type == 'pe'
+			Open3.popen3("samtools view singletons.bam") do |stdin, stdout, stderr, t|
+				stdout.each do |line|
+  		
+  				line = line.strip.split(/\s+/)
+  				qname, flag, chr, start = line[0..3]  
+  			
+  				if remapped.has_key?(qname)
+  				
+  					flag.to_i & 0x10 > 0 ? strand = -1 : strand = 1
+  					cigar = line[5]
+						distance = Alignment.genomic_mappinglength(cigar, read_length)
+			
+						if distance != false
+							strand == 1 ? stop = start.to_i + distance : stop = start.to_i - distance
+							mate_1 = [remapped[qname][0], remapped[qname][1]].flatten
+							mate_2 = [chr, start.to_i, stop, strand]
+							remapped[qname][2] = 'pe' if Alignment.paired?(mate_1, mate_2)
+						end
+					end
+				end
+			end
+		end
 		# Output
 		File.open(output_file, 'w') do |output|
-			remapped.each {|k, v| output.puts ["#{k}/#{v[-1]}", v[0]].join("\t")}
+			remapped.each {|k, v| output.puts ["#{k}/#{v[-1]}", v[0..-2]].join("\t")}
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Found remapped reads."
 	end
-	
+		
 	
 	# Compare first mapping and remapping to get final candidates.
 	#
@@ -289,58 +332,31 @@ module CircRNA
 	# output_file - Name of output_file.
 	#
 	# Return tab-delimited file with candidate loci.
-	def final_candidates(before, after, output_file)
-		circles = {}
-		all_ids = {}
+	def final_candidates(input_file, output_file)
 
-		# Read circular candidates into hash
-		File.open(before, 'r').readlines.each do |line|
-			line = line.strip.split("\t")
-	
-			pos = line[0..2].join(':')
-			read_count = line[3].to_i
-			qname = line[-1].split(';')
-	
-			# Create qname index to make search faster
-			# Remark 2
-			qname.each do |q|
-				k1, k2 = q.split(':')[3..4]
+		loci = {}
 		
-				all_ids[k1] = {} if !all_ids.has_key?(k1)
-		
-				if !all_ids[k1].has_key?(k2)
-					all_ids[k1][k2] = [q]
-				else
-					all_ids[k1][k2] << q
-				end
-			end
-
-			circles[pos] = {:counts => read_count, :qnames => qname}
-		end
-
-		# Read remapped readpairs and compare them to initial candidates
-		File.open(after, 'r').readlines.each do |line|
+		File.open(input_file, 'r').readlines.each do |line|
 			line = line.strip.split("\t")
-	
 			qname = line[0]
+			base = qname.gsub(/\/[1,2]/, '')
 			pos = line[1..3].join(':')
-			k1, k2 = qname.split(':')[3..4]
+			support = line[-1]
+			qname = ["#{base}/1", "#{base}/2"] if support == 'pe'
 
-			read_unused = (!all_ids.has_key?(k1) || !all_ids[k1].has_key?(k2) || !all_ids[k1][k2].include?(qname)) 
-						
-			# Add read if read is not already used (condition 2)
-			if circles.has_key?(pos) && read_unused 
-				circles[pos][:counts] += 1
-				circles[pos][:qnames] << qname
+			if !loci.has_key?(pos)
+				loci[pos] = {:count => 1, :qnames => [qname], :type => support}
+			else 
+				loci[pos][:qnames] << qname
+				loci[pos][:count] += 1
+				loci[pos][:type] = support if support == 'pe'
 			end
 		end
-
+		
 		# Output
 		File.open(output_file, 'w') do |output|
-			output.puts %w(chr pos_a pos_b readCounts qnames).join("\t")
-	
-			circles.each do |pos, v| 
-				output.puts [pos.split(':'), v[:counts], v[:qnames].join(';')].join("\t")
+			loci.each do |pos, v| 
+				output.puts [pos.split(':'), v[:count], v[:type], v[:qnames].join(';')].join("\t")
 			end
 		end
 		$logfile.puts "#{Time.new.strftime("%c")}: Final candidate list finished."

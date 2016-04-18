@@ -156,8 +156,8 @@ module Alignment
 		conditions = []
 		
 		conditions.push(mate1_chr == mate2_chr)
-		conditions.push(mate1_start <= mate2_start && mate1_stop >= mate2_stop)
-		conditions.push(mate1_strand != mate2_strand)
+		conditions.push(mate1_start.to_i <= mate2_start && mate1_stop.to_i >= mate2_stop)
+		conditions.push(mate1_strand.to_i != mate2_strand)
 		conditions.all? { |con| con == true }
 	end
 end
